@@ -27,6 +27,10 @@ Protótipo educacional de caixa de medicamentos com **3 gavetas manuais**, ESP82
 
 Confirme o pinout do modelo real antes de conectar. GPIO2 participa da inicialização do ESP8266. Não aplique 5 V aos GPIOs.
 
+## Fazer tudo pelo celular 📱
+
+Veja o [guia completo para Android, USB OTG, hotspot e painel web](docs/guia-completo-pelo-celular.md). A gravação via Android depende de suporte do aplicativo à placa ESP8266; ainda não foi validada no hardware.
+
 ## Instalação rápida
 
 1. Instale o **Arduino IDE** e o pacote de placas ESP8266.
@@ -59,6 +63,7 @@ O código foi atualizado no repositório, mas **ainda não há confirmação de 
 ## Documentação
 
 - [Instalação, credenciais e rede](docs/instalacao.md)
+- [Passo a passo completo pelo celular](docs/guia-completo-pelo-celular.md)
 - [Funcionamento, limitações e segurança](docs/funcionamento-e-seguranca.md)
 - [Firmware](firmware/MedBox.ino)
 - [Modelo de credenciais](firmware/secrets.example.h)
