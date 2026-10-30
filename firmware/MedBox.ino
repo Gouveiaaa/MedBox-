@@ -5,6 +5,7 @@
 #include <Adafruit_SSD1306.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
+#include <LittleFS.h>
 #include "secrets.h"
 
 #define SCREEN_WIDTH 128
@@ -17,6 +18,10 @@ ESP8266WebServer server(80);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "a.st1.ntp.br", -10800, 60000);
 bool horaSincronizada = false;
+bool alarmeSilenciado = false;
+unsigned long ultimaTentativaWiFi = 0;
+unsigned long ultimaTentativaNTP = 0;
+unsigned long ultimoDiaPersistido = 0;
 
 struct Gaveta {
   uint8_t hora, minuto;
@@ -29,6 +34,37 @@ Gaveta gavetas[3] = {
   {20, 0, "Exemplo 3", -1}
 };
 
+void salvarConfiguracao() {
+  File f = LittleFS.open("/gavetas.txt", "w");
+  if (!f) return;
+  for (int i=0;i<3;i++) {
+    f.println(String(gavetas[i].hora) + "|" + String(gavetas[i].minuto) + "|" + gavetas[i].remedio);
+  }
+  f.close();
+}
+void carregarConfiguracao() {
+  File f = LittleFS.open("/gavetas.txt", "r");
+  if (!f) return;
+  for (int i=0;i<3 && f.available();i++) {
+    String linha=f.readStringUntil('\n'); linha.trim();
+    int a=linha.indexOf('|'), b=linha.indexOf('|',a+1);
+    if (a<0 || b<0) continue;
+    int h=linha.substring(0,a).toInt(), m=linha.substring(a+1,b).toInt();
+    String nome=linha.substring(b+1);
+    if (h>=0 && h<24 && m>=0 && m<60 && nome.length()>0 && nome.length()<=40) {
+      gavetas[i].hora=h; gavetas[i].minuto=m; gavetas[i].remedio=nome;
+    }
+  }
+  f.close();
+}
+void silenciar() {
+  if (!autorizado()) return;
+  alarmeSilenciado=true;
+  noTone(BUZZER_PIN);
+  digitalWrite(LED_PIN,HIGH);
+  server.sendHeader("Location","/",true);
+  server.send(303,"text/plain","");
+}
 void tela(const String &a, const String &b, const String &c) {
   display.clearDisplay();
   display.setTextSize(1);
@@ -58,6 +94,7 @@ bool autorizado() {
   return false;
 }
 void buzzer() {
+  if (alarmeSilenciado) return;
   for(int i=0;i<3;i++) {
     tone(BUZZER_PIN,1000,200);
     digitalWrite(LED_PIN,LOW);
@@ -89,6 +126,7 @@ void raiz() {
     html+=String(gavetas[i].minuto);
     html+=F("'><button>Salvar</button></form></section>");
   }
+  html+=F("<section><form action='/silenciar' method='post'><button>Silenciar alarmes de hoje</button></form></section>");
   html+=F("<p>Protótipo educacional. Use também outro lembrete confiável.</p></body></html>");
   server.send(200,"text/html; charset=utf-8",html);
 }
@@ -107,12 +145,15 @@ void salvar() {
   gavetas[i].hora=h.toInt();
   gavetas[i].minuto=m.toInt();
   gavetas[i].ultimoDia=-1;
+  salvarConfiguracao();
   tela("Gaveta "+String(i+1)+" salva",nome,h+":"+m);
   server.sendHeader("Location","/",true);
   server.send(303,"text/plain","");
 }
 void setup() {
   Serial.begin(115200);
+  if (LittleFS.begin()) carregarConfiguracao();
+  else Serial.println(F("Falha LittleFS: configuracoes nao serao persistidas"));
   pinMode(BUZZER_PIN,OUTPUT);
   pinMode(LED_PIN,OUTPUT);
   digitalWrite(LED_PIN,HIGH);
@@ -134,6 +175,7 @@ void setup() {
     horaSincronizada=timeClient.forceUpdate();
     server.on("/",HTTP_GET,raiz);
     server.on("/salvar",HTTP_POST,salvar);
+    server.on("/silenciar",HTTP_POST,silenciar);
     server.begin();
     tela("Sistema pronto","Abra no navegador",WiFi.localIP().toString());
     Serial.println(WiFi.localIP());
@@ -142,12 +184,28 @@ void setup() {
   }
 }
 void loop() {
-  if(WiFi.status()!=WL_CONNECTED) { delay(1000); return; }
+  if(WiFi.status()!=WL_CONNECTED) {
+    if(millis()-ultimaTentativaWiFi>10000UL) {
+      ultimaTentativaWiFi=millis();
+      WiFi.reconnect();
+    }
+    delay(100);
+    return;
+  }
+
   server.handleClient();
   if(timeClient.update()) horaSincronizada=true;
+  if(!horaSincronizada && millis()-ultimaTentativaNTP>15000UL) {
+    ultimaTentativaNTP=millis();
+    horaSincronizada=timeClient.forceUpdate();
+  }
   if(horaSincronizada) {
     unsigned long segundos=timeClient.getEpochTime();
     long dia=(long)(segundos/86400UL);
+    if ((unsigned long)dia!=ultimoDiaPersistido) {
+      ultimoDiaPersistido=(unsigned long)dia;
+      alarmeSilenciado=false;
+    }
     int h=timeClient.getHours(), m=timeClient.getMinutes();
     for(int i=0;i<3;i++) {
       if(h==gavetas[i].hora && m==gavetas[i].minuto && gavetas[i].ultimoDia!=dia) {
