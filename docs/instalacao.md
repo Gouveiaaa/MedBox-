@@ -1,5 +1,7 @@
 # Instalação da MedBox: Arduino, Wi-Fi, usuários e acesso web
 
+📱 **Quer fazer o procedimento pelo Android?** Siga o [guia completo pelo celular](guia-completo-pelo-celular.md), incluindo USB OTG, hotspot e uso do painel. A compilação e gravação por Android dependem de compatibilidade ainda não validada.
+
 ## 1. Pré-requisitos
 
 - ESP8266 NodeMCU com OLED SSD1306 integrado (pinagem real a confirmar).
