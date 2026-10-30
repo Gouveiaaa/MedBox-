@@ -1,0 +1,13 @@
+# Segredos e arquivos locais
+firmware/secrets.h
+**/secrets.h
+*.local
+.env
+.env.*
+!.env.example
+# Build
+build/
+*.bin
+*.elf
+*.map
+.DS_Store
