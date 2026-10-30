@@ -113,23 +113,50 @@ bool inteiroValido(const String &s, int minV, int maxV) {
 }
 void raiz() {
   if(!autorizado()) return;
-  String html=F("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>MedBox</title><style>body{font:16px system-ui;background:#f1f5f9;color:#0f172a;max-width:450px;margin:25px auto;padding:12px}section{background:white;padding:18px;margin:12px 0;border-radius:12px}input,button{display:block;width:100%;box-sizing:border-box;padding:10px;margin:8px 0}button{background:#0284c7;color:white;border:0;border-radius:6px}</style></head><body><h1>💊 MedBox Inteligente</h1>");
+  String html;
+  html.reserve(5800);
+  html+=F(R"MEDBOX(<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1267c8"><title>MedBox Inteligente</title>
+<style>
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:#f1f5f9;color:#152238;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{background:#1267c8;color:white;padding:24px max(18px,env(safe-area-inset-right)) 24px max(18px,env(safe-area-inset-left))}
+header .wrap{max-width:1000px;margin:auto}h1{font-size:clamp(1.5rem,5vw,2rem);margin:0}header p{margin:4px 0 0;opacity:.9}
+main{width:100%;max-width:1000px;margin:0 auto;padding:18px max(14px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+section{min-width:0;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px;box-shadow:0 3px 12px #0f172a0a}
+h2{font-size:1.15rem;margin:0 0 16px;color:#1254a3}
+label{display:block;font-weight:600;font-size:.93rem;margin:12px 0 5px}
+input{display:block;width:100%;min-width:0;border:1px solid #b7c5d6;border-radius:10px;padding:12px;font:inherit;font-size:16px;background:#fff;color:#152238}
+input:focus{outline:2px solid #2581eb;outline-offset:1px}
+.time{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+button{display:block;width:100%;min-height:48px;border:0;border-radius:10px;background:#1267c8;color:#fff;font:600 16px system-ui;cursor:pointer;margin-top:18px;padding:12px}
+button:active{filter:brightness(.9)}.mute{background:#b42332}.actions{margin-top:16px}
+footer{color:#526174;text-align:center;font-size:.87rem;margin:22px 0 0}
+@media(max-width:740px){.grid{grid-template-columns:1fr}main{padding-top:14px}section{padding:16px}header{padding-top:20px;padding-bottom:20px}}
+@media(min-width:741px) and (max-width:950px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style></head><body><header><div class="wrap"><h1>💊 MedBox Inteligente</h1><p>Configure seus medicamentos e horários</p></div></header>
+<main><div class="grid">)MEDBOX");
   for(int i=0;i<3;i++) {
     html+=F("<section><h2>Gaveta "); html+=String(i+1);
     html+=F("</h2><form action='/salvar' method='post'><input type='hidden' name='index' value='");
     html+=String(i);
-    html+=F("'><label>Medicamento</label><input name='remedio' maxlength='40' required value='");
+    html+=F("'><label for='rem");html+=String(i);html+=F("'>Medicamento</label><input id='rem");html+=String(i);
+    html+=F("' name='remedio' maxlength='40' required autocomplete='off' value='");
     html+=escapeHtml(gavetas[i].remedio);
-    html+=F("'><label>Hora</label><input type='number' name='hora' min='0' max='23' value='");
+    html+=F("'><div class='time'><div><label>Hora<input type='number' inputmode='numeric' name='hora' min='0' max='23' required value='");
     html+=String(gavetas[i].hora);
-    html+=F("'><label>Minuto</label><input type='number' name='minuto' min='0' max='59' value='");
+    html+=F("'></label></div><div><label>Minuto<input type='number' inputmode='numeric' name='minuto' min='0' max='59' required value='");
     html+=String(gavetas[i].minuto);
-    html+=F("'><button>Salvar</button></form></section>");
+    html+=F("'></label></div></div><button type='submit'>Salvar gaveta ");
+    html+=String(i+1);html+=F("</button></form></section>");
   }
-  html+=F("<section><form action='/silenciar' method='post'><button>Silenciar alarmes de hoje</button></form></section>");
-  html+=F("<p>Protótipo educacional. Use também outro lembrete confiável.</p></body></html>");
+  html+=F(R"MEDBOX(</div><section class="actions"><h2>Controle de alarmes</h2><form action="/silenciar" method="post"><button class="mute" type="submit">Silenciar alarmes de hoje</button></form></section>
+<footer>Protótipo educacional. Use também outro lembrete confiável.</footer></main></body></html>)MEDBOX");
   server.send(200,"text/html; charset=utf-8",html);
 }
+
 void salvar() {
   if(!autorizado()) return;
   String idx=server.arg("index"), h=server.arg("hora"), m=server.arg("minuto");
