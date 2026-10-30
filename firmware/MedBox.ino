@@ -1,5 +1,6 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -18,6 +19,7 @@ ESP8266WebServer server(80);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "a.st1.ntp.br", -10800, 60000);
 bool horaSincronizada = false;
+bool mdnsAtivo = false;
 bool alarmeSilenciado = false;
 unsigned long ultimaTentativaWiFi = 0;
 unsigned long ultimaTentativaNTP = 0;
@@ -204,6 +206,8 @@ void setup() {
     server.on("/salvar",HTTP_POST,salvar);
     server.on("/silenciar",HTTP_POST,silenciar);
     server.begin();
+    mdnsAtivo = MDNS.begin("medbox");
+    if (mdnsAtivo) { MDNS.addService("http", "tcp", 80); Serial.println(F("mDNS: http://medbox.local")); }
     tela("Sistema pronto","Abra no navegador",WiFi.localIP().toString());
     Serial.println(WiFi.localIP());
   } else {
@@ -221,6 +225,7 @@ void loop() {
   }
 
   server.handleClient();
+  if (mdnsAtivo) MDNS.update();
   if(timeClient.update()) horaSincronizada=true;
   if(!horaSincronizada && millis()-ultimaTentativaNTP>15000UL) {
     ultimaTentativaNTP=millis();
