@@ -65,4 +65,4 @@ O código foi atualizado no repositório, mas **ainda não há confirmação de 
 
 ## Licença
 
-Nenhuma licença de reutilização foi concedida por enquanto. Consulte o proprietário antes de redistribuir ou modificar.
+Este projeto é distribuído sob a [Licença MIT](LICENSE). Copyright (c) 2026 Pedro Augusto Gouveia Rodrigues.
