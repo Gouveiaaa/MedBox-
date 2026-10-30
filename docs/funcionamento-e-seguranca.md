@@ -1,26 +1,58 @@
-# Funcionamento e segurança
+# Funcionamento, rede, segurança e limitações da MedBox
 
-## Fluxo
-1. O ESP8266 conecta ao Wi-Fi configurado.
-2. Obtém horário pelo servidor NTP `a.st1.ntp.br` (UTC-3).
-3. Exibe IP no OLED e disponibiliza painel web na rede local.
-4. O administrador define nome e horário de cada uma das três gavetas.
-5. Quando o horário coincide, o OLED mostra a gaveta e o medicamento, e o buzzer e o LED sinalizam.
+## Fluxo operacional atual
 
-## Segurança
-- Nunca publique senhas reais em código, README, imagens ou logs.
-- Configure credenciais no arquivo `secrets.h`, excluído pelo `.gitignore`.
-- **HTTP Basic não criptografa senha nem tráfego.** Use apenas Wi-Fi confiável, sem exposição pública ou port forwarding.
-- Troque as credenciais anteriormente compartilhadas antes de usar o equipamento.
-- Valide entrada do usuário e escape conteúdo HTML para reduzir riscos de injeção.
-- O painel web não deve ser usado em redes compartilhadas ou hostis.
+1. O ESP8266 inicializa periféricos, monta LittleFS e tenta carregar as configurações das três gavetas.
+2. Tenta conectar ao Wi-Fi 2,4 GHz configurado no `secrets.h`.
+3. Quando conecta durante a inicialização, sincroniza horário com `a.st1.ntp.br` (UTC-3), inicia servidor HTTP e anuncia `medbox.local` via mDNS.
+4. Exibe o IP no OLED e imprime no Monitor Serial a 115200 baud.
+5. O usuário acessa pelo IP ou por `http://medbox.local` quando a rede suportar mDNS.
+6. O painel solicita **usuário e senha**, definidos em `MEDBOX_ADMIN_USER` e `MEDBOX_ADMIN_PASSWORD`.
+7. Cada gaveta tem nome, hora e minuto; alterações são salvas no LittleFS.
+8. Quando o horário coincide e o NTP está válido, o OLED mostra o aviso e o buzzer/LED sinalizam.
+9. O botão **Silenciar alarmes de hoje** desativa os toques restantes daquele dia durante a sessão atual.
 
-## Limitações operacionais
-- O sistema não detecta se o medicamento foi retirado ou ingerido.
-- Um horário perdido durante falta de energia ou rede não é recuperado automaticamente.
-- Alterações não sobrevivem a reinício nesta versão.
-- O fuso UTC-3 é fixo.
-- Alertas dependem do funcionamento do microcontrolador e dos periféricos.
+## Layout do painel
 
-## Próximas melhorias
-Persistência em LittleFS, modo de configuração inicial, watchdog operacional, sincronização e recuperação de horários, autenticação mais robusta, testes de hardware e confirmação física de gaveta.
+O HTML/CSS é servido diretamente pelo ESP8266, sem hospedagem externa. O painel se ajusta a Android, iOS, tablets e PCs: uma coluna em telas pequenas e múltiplas colunas em telas maiores. Não há aplicativo nativo.
+
+## Usuários, senhas e segurança
+
+**Preservar no firmware os quatro campos:**
+
+- `MEDBOX_WIFI_SSID`: nome do roteador/hotspot.
+- `MEDBOX_WIFI_PASSWORD`: senha do Wi-Fi.
+- `MEDBOX_ADMIN_USER`: usuário do painel.
+- `MEDBOX_ADMIN_PASSWORD`: senha do painel.
+
+Esses valores ficam no arquivo **local** `firmware/secrets.h`, criado a partir de `firmware/secrets.example.h`. O Git ignora `secrets.h`, mas não protege senhas que sejam copiadas para outros arquivos ou commits.
+
+A autenticação HTTP Basic **não criptografa** credenciais, pois o servidor usa HTTP sem TLS. Use somente rede local confiável, não encaminhe a porta 80 para a internet e não use senhas reutilizadas de serviços importantes.
+
+## Hotspot e medbox.local
+
+- ESP8266 suporta apenas Wi-Fi 2,4 GHz.
+- `medbox.local` é nome mDNS anunciado pelo ESP8266, **não um domínio cadastrado na internet**.
+- Suporte mDNS varia entre Android, iOS, Windows e roteadores/hotspots; IP numérico é a alternativa.
+- Alguns celulares não conseguem acessar clientes do próprio hotspot. Um segundo dispositivo conectado à rede costuma ser a opção mais previsível.
+- O hotspot precisa fornecer internet para sincronização NTP.
+
+## Persistência e alertas
+
+Os nomes e horários são gravados no LittleFS e podem sobreviver a reinícios. O estado `ultimoDia` de cada gaveta e o silenciamento do dia ficam apenas na RAM, portanto reiniciar pode permitir novo alerta no mesmo dia. O sistema não detecta abertura das gavetas nem ingestão.
+
+## Limitações e pontos a validar
+
+- **Firmware ainda não compilado/testado em placa física.**
+- Se o Wi-Fi não conectar nos primeiros 20 segundos de inicialização, o servidor web não é iniciado nessa execução; é preciso reiniciar após disponibilizar a rede.
+- O firmware tenta reconectar o Wi-Fi, mas a recuperação completa do mDNS após desconexão ainda não foi validada.
+- Sem NTP válido após reinicialização, os alertas por horário não funcionam.
+- O fuso UTC-3 é fixo, sem horário de verão automático.
+- O buzzer usa pequenos delays bloqueantes; não há confirmação física da dose.
+- Configurações padrão são apenas exemplos ilustrativos.
+
+## Próximos testes recomendados
+
+Compilação, testes reais em ESP8266/OLED, persistência após desligamento, acesso em Android e iPhone via hotspot, comportamento do mDNS, reinício sem Wi-Fi, alarmes em virada do dia e revisão do circuito do buzzer.
+
+> ⚠️ Protótipo educacional, não é dispositivo médico certificado e não deve ser o único sistema de lembrete.
