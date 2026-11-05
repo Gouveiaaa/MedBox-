@@ -4,7 +4,8 @@
 
 ## 1. Pré-requisitos
 
-- ESP8266 NodeMCU com OLED SSD1306 integrado (pinagem real a confirmar).
+- ESP8266 NodeMCU com OLED SSD1306 integrado de 0,96″ e resolução de 128×64.
+- LEDs azul, vermelho e verde, três resistores de 220 Ω e jumpers.
 - Cabo USB de dados e alimentação adequada.
 - Arduino IDE com pacote de placas **ESP8266 by ESP8266 Community**.
 - Bibliotecas adicionais: **Adafruit GFX Library**, **Adafruit SSD1306**, **NTPClient**.
@@ -14,14 +15,17 @@ No Arduino IDE, adicione o índice de placas `https://arduino.esp8266.com/stable
 
 ## 2. Ligações propostas
 
-| Sinal | NodeMCU | GPIO |
+| Sinal | Padrão | Alternativa para OLED em D6/D5 |
 |---|---|---|
-| OLED SDA | D2 | 4 |
-| OLED SCL | D1 | 5 |
-| Buzzer (sinal) | D5 | 14 |
-| LED integrado | D4 | 2 |
+| OLED SDA | D2 (GPIO4) | D6 (GPIO12) |
+| OLED SCL | D1 (GPIO5) | D5 (GPIO14) |
+| LED azul, gaveta 1 | D5 (GPIO14) | D1 (GPIO5) |
+| LED vermelho, gaveta 2 | D6 (GPIO12) | D2 (GPIO4) |
+| LED verde, gaveta 3 | D7 (GPIO13) | D7 (GPIO13) |
 
-**Atenção:** em placas com OLED integrado, os pinos I²C e o endereço podem ser diferentes. Verifique o modelo exato. Use driver/transistor apropriado para buzzer de maior corrente. Não aplique 5 V aos GPIOs.
+Com a placa desligada, ligue cada saída ao ânodo (perna longa) do LED por um resistor de 220 Ω. Ligue o cátodo (perna curta) ao GND. Use os jumpers para fazer as conexões e mantenha os GPIOs em 3,3 V.
+
+O OLED já vem ligado na placa. Confirme os pinos e o endereço I²C no manual do modelo. Para a coluna alternativa, mude `OLED_NOS_PINOS_D6_D5` para `true` no início de `MedBox.ino` e use a coluna alternativa também para os LEDs. As duas configurações usam `OLED_ENDERECO = 0x3C`.
 
 ## 3. Manter usuário e senha no projeto
 
@@ -39,7 +43,7 @@ Copie `firmware/secrets.example.h` para `firmware/secrets.h` e edite o arquivo l
 
 ## 4. Gravar o firmware
 
-Abra `firmware/MedBox.ino` no Arduino IDE, selecione placa e porta, compile e envie. Abra o Monitor Serial em **115200 baud**. O firmware ainda precisa ser validado por compilação e teste físico.
+Coloque `MedBox.ino` e o seu `secrets.h` na mesma pasta, chamada `MedBox`. Abra `MedBox.ino` no Arduino IDE, selecione placa e porta, compile e envie. Abra o Monitor Serial em **115200 baud**. O firmware ainda precisa ser validado por compilação para ESP8266 e teste físico.
 
 ## 5. Roteador ou hotspot do celular
 
@@ -62,7 +66,7 @@ O painel usa layout responsivo: no celular os cartões ficam em coluna; em PC, p
 
 ## 7. Configurar os medicamentos
 
-No painel, preencha nome, hora e minuto em cada uma das três gavetas e toque em **Salvar gaveta**. As configurações são gravadas em LittleFS. O botão **Silenciar alarmes de hoje** suprime os toques do restante do dia enquanto a placa permanecer ligada.
+No painel, preencha nome, hora e minuto em cada uma das três gavetas e toque em **Salvar gaveta**. As configurações são gravadas em LittleFS. No horário marcado, o LED correspondente pisca por um minuto. O botão **Silenciar alarmes de hoje** apaga os LEDs e suspende os próximos avisos luminosos do dia enquanto a placa permanecer ligada.
 
 ## 8. Diagnóstico
 
@@ -70,7 +74,7 @@ No painel, preencha nome, hora e minuto em cada uma das três gavetas e toque em
 - **Sem IP:** verifique SSID, senha, 2,4 GHz, alcance e reinicie a placa.
 - **OLED apagado:** confira pinagem, endereço I²C e alimentação.
 - **Sem alertas:** confira NTP/internet, relógio, horário e estado de silenciamento.
-- **Sem buzzer:** verifique tipo de buzzer e circuito de acionamento.
+- **LED apagado durante o aviso:** confira a polaridade, o resistor, o jumper, o GND e a coluna de pinagem selecionada.
 - **Horários não persistem:** confira a inicialização e funcionamento do LittleFS.
 
 **Segurança:** HTTP Basic não criptografa credenciais. Use rede confiável e nunca publique `secrets.h` ou exponha a porta 80 à internet.

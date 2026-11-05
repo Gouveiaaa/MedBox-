@@ -8,7 +8,7 @@ Este guia ensina a **preparar o código, tentar compilar/gravar o ESP8266 e util
 
 - Celular **Android** com suporte **USB OTG/USB host**.
 - Cabo USB **de dados** compatível com o ESP8266 e, se necessário, adaptador **USB-C OTG**.
-- Placa **ESP8266 NodeMCU** e componentes montados conforme o pinout real.
+- Placa **ESP8266 NodeMCU com OLED integrado**, LEDs azul, vermelho e verde, três resistores e jumpers. Veja a [pinagem da montagem](instalacao.md#2-ligações-propostas).
 - Acesso à internet para baixar ferramentas e bibliotecas.
 - Idealmente, **um segundo celular**: o primeiro fornece o hotspot; o segundo abre o painel. Também é possível usar um roteador Wi-Fi 2,4 GHz existente.
 
@@ -89,7 +89,7 @@ O **usuário e a senha do painel são diferentes** da senha do Wi-Fi. O firmware
 5. Quando o navegador pedir autenticação, use **`MEDBOX_ADMIN_USER`** e **`MEDBOX_ADMIN_PASSWORD`** definidos no seu `secrets.h`.
 6. Na página, preencha **medicamento, hora e minuto** de cada uma das **3 gavetas**.
 7. Toque em **Salvar** na gaveta correspondente. Os dados são armazenados no **LittleFS** e devem permanecer após reiniciar.
-8. Use **Silenciar alarmes de hoje** para impedir novos toques naquele dia enquanto o ESP8266 estiver ligado.
+8. Use **Silenciar alarmes de hoje** para apagar os LEDs e suspender os próximos avisos luminosos do dia enquanto o ESP8266 estiver ligado.
 
 O painel se adapta à largura da tela: cartões em coluna no celular e em grade em telas maiores. **Não é preciso instalar um aplicativo nativo** para usá-lo depois que o firmware estiver gravado.
 
@@ -111,7 +111,7 @@ Isso cria um **atalho para o endereço local**, não transforma a MedBox em serv
 | `medbox.local` não abre | mDNS pode não funcionar no Android/hotspot; tente IP |
 | IP também não abre | Dispositivos na mesma rede? Hotspot isola clientes? Servidor iniciou? |
 | Não aparece IP no OLED | Verifique I²C, alimentação e Monitor Serial |
-| Não toca no horário | Verifique sincronização NTP, fuso, silenciamento e buzzer |
+| LED não pisca no horário | Verifique sincronização NTP, fuso, silenciamento e ligações do LED |
 | Não salva medicamentos | Verifique LittleFS e mensagens do firmware |
 
 ## 11. Segurança e limites

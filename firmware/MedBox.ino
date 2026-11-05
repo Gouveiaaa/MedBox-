@@ -12,12 +12,25 @@
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
-const uint8_t BUZZER_PIN = 14; // D5
-const uint8_t LED_PIN = 2;     // D4, ativo em LOW
+
+// Use true nas placas com OLED em SDA D6 (GPIO12) e SCL D5 (GPIO14).
+constexpr bool OLED_NOS_PINOS_D6_D5 = false;
+constexpr uint8_t OLED_SDA_PIN = OLED_NOS_PINOS_D6_D5 ? 12 : 4;
+constexpr uint8_t OLED_SCL_PIN = OLED_NOS_PINOS_D6_D5 ? 14 : 5;
+constexpr uint8_t OLED_ENDERECO = 0x3C;
+constexpr uint8_t LED_PINS[] = {
+  OLED_NOS_PINOS_D6_D5 ? 5 : 14, // Gaveta 1, azul (D1 ou D5)
+  OLED_NOS_PINOS_D6_D5 ? 4 : 12, // Gaveta 2, vermelho (D2 ou D6)
+  13                           // Gaveta 3, verde (D7)
+};
+constexpr unsigned long DURACAO_ALERTA_LED = 60000UL;
+constexpr unsigned long INTERVALO_LED = 500UL;
+
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 ESP8266WebServer server(80);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "a.st1.ntp.br", -10800, 60000);
+bool oledDisponivel = false;
 bool horaSincronizada = false;
 bool mdnsAtivo = false;
 bool alarmeSilenciado = false;
@@ -29,11 +42,13 @@ struct Gaveta {
   uint8_t hora, minuto;
   String remedio;
   long ultimoDia; // evita repetição no mesmo dia durante execução
+  unsigned long inicioAlertaLed;
+  bool alertaLedAtivo;
 };
 Gaveta gavetas[3] = {
-  {8, 0, "Exemplo 1", -1},
-  {12, 0, "Exemplo 2", -1},
-  {20, 0, "Exemplo 3", -1}
+  {8, 0, "Exemplo 1", -1, 0, false},
+  {12, 0, "Exemplo 2", -1, 0, false},
+  {20, 0, "Exemplo 3", -1, 0, false}
 };
 
 void salvarConfiguracao() {
@@ -59,15 +74,8 @@ void carregarConfiguracao() {
   }
   f.close();
 }
-void silenciar() {
-  if (!autorizado()) return;
-  alarmeSilenciado=true;
-  noTone(BUZZER_PIN);
-  digitalWrite(LED_PIN,HIGH);
-  server.sendHeader("Location","/",true);
-  server.send(303,"text/plain","");
-}
 void tela(const String &a, const String &b, const String &c) {
+  if (!oledDisponivel) return;
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
@@ -95,17 +103,24 @@ bool autorizado() {
   server.requestAuthentication();
   return false;
 }
-void buzzer() {
-  if (alarmeSilenciado) return;
-  for(int i=0;i<3;i++) {
-    tone(BUZZER_PIN,1000,200);
-    digitalWrite(LED_PIN,LOW);
-    delay(250);
-    digitalWrite(LED_PIN,HIGH);
-    delay(100);
-    yield();
+void atualizarLeds() {
+  const unsigned long agora = millis();
+  for (int i = 0; i < 3; i++) {
+    Gaveta &gaveta = gavetas[i];
+    const unsigned long decorrido = agora - gaveta.inicioAlertaLed;
+    if (alarmeSilenciado || decorrido >= DURACAO_ALERTA_LED) {
+      gaveta.alertaLedAtivo = false;
+    }
+    const bool aceso = gaveta.alertaLedAtivo && (decorrido / INTERVALO_LED) % 2 == 0;
+    digitalWrite(LED_PINS[i], aceso ? HIGH : LOW);
   }
-  noTone(BUZZER_PIN);
+}
+void silenciar() {
+  if (!autorizado()) return;
+  alarmeSilenciado = true;
+  atualizarLeds();
+  server.sendHeader("Location","/",true);
+  server.send(303,"text/plain","");
 }
 bool inteiroValido(const String &s, int minV, int maxV) {
   if(s.length()==0 || s.length()>2) return false;
@@ -174,6 +189,7 @@ void salvar() {
   gavetas[i].hora=h.toInt();
   gavetas[i].minuto=m.toInt();
   gavetas[i].ultimoDia=-1;
+  gavetas[i].alertaLedAtivo = false;
   salvarConfiguracao();
   tela("Gaveta "+String(i+1)+" salva",nome,h+":"+m);
   server.sendHeader("Location","/",true);
@@ -181,15 +197,18 @@ void salvar() {
 }
 void setup() {
   Serial.begin(115200);
+  for (uint8_t pin : LED_PINS) {
+    digitalWrite(pin, LOW);
+    pinMode(pin, OUTPUT);
+  }
   if (LittleFS.begin()) carregarConfiguracao();
   else Serial.println(F("Falha LittleFS: configuracoes nao serao persistidas"));
-  pinMode(BUZZER_PIN,OUTPUT);
-  pinMode(LED_PIN,OUTPUT);
-  digitalWrite(LED_PIN,HIGH);
-  Wire.begin(4,5); // CONFIRMAR pinos no modelo real de OLED integrado
-  if(!display.begin(SSD1306_SWITCHCAPVCC,0x3C)) {
-    Serial.println(F("OLED indisponivel"));
-    // Permite continuar usando o painel mesmo sem OLED.
+  Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
+  Wire.beginTransmission(OLED_ENDERECO);
+  oledDisponivel = Wire.endTransmission() == 0 &&
+                   display.begin(SSD1306_SWITCHCAPVCC, OLED_ENDERECO, false, false);
+  if (!oledDisponivel) {
+    Serial.println(F("OLED indisponivel: confira SDA, SCL e endereco I2C"));
   }
   tela("Conectando Wi-Fi...","","");
   WiFi.mode(WIFI_STA);
@@ -215,6 +234,7 @@ void setup() {
   }
 }
 void loop() {
+  atualizarLeds();
   if(WiFi.status()!=WL_CONNECTED) {
     if(millis()-ultimaTentativaWiFi>10000UL) {
       ultimaTentativaWiFi=millis();
@@ -243,7 +263,10 @@ void loop() {
       if(h==gavetas[i].hora && m==gavetas[i].minuto && gavetas[i].ultimoDia!=dia) {
         gavetas[i].ultimoDia=dia;
         tela("HORA DO REMEDIO!","Gaveta "+String(i+1),gavetas[i].remedio);
-        buzzer();
+        if (!alarmeSilenciado) {
+          gavetas[i].inicioAlertaLed = millis();
+          gavetas[i].alertaLedAtivo = true;
+        }
       }
     }
   }

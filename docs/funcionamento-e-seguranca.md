@@ -9,8 +9,8 @@
 5. O usuário acessa pelo IP ou por `http://medbox.local` quando a rede suportar mDNS.
 6. O painel solicita **usuário e senha**, definidos em `MEDBOX_ADMIN_USER` e `MEDBOX_ADMIN_PASSWORD`.
 7. Cada gaveta tem nome, hora e minuto; alterações são salvas no LittleFS.
-8. Quando o horário coincide e o NTP está válido, o OLED mostra o aviso e o buzzer/LED sinalizam.
-9. O botão **Silenciar alarmes de hoje** desativa os toques restantes daquele dia durante a sessão atual.
+8. Quando o horário coincide e o NTP está válido, o OLED mostra o aviso e o LED da gaveta pisca por um minuto. Se mais de uma gaveta tiver o mesmo horário, os LEDs correspondentes piscam e o OLED mostra a última gaveta processada.
+9. O botão **Silenciar alarmes de hoje** apaga os LEDs e desativa os avisos luminosos restantes daquele dia durante a sessão atual.
 
 ## Layout do painel
 
@@ -43,16 +43,15 @@ Os nomes e horários são gravados no LittleFS e podem sobreviver a reinícios. 
 
 ## Limitações e pontos a validar
 
-- **Firmware ainda não compilado/testado em placa física.**
+- **A compilação para ESP8266 e o teste na placa estão pendentes.**
 - Se o Wi-Fi não conectar nos primeiros 20 segundos de inicialização, o servidor web não é iniciado nessa execução; é preciso reiniciar após disponibilizar a rede.
 - O firmware tenta reconectar o Wi-Fi, mas a recuperação completa do mDNS após desconexão ainda não foi validada.
 - Sem NTP válido após reinicialização, os alertas por horário não funcionam.
 - O fuso UTC-3 é fixo, sem horário de verão automático.
-- O buzzer usa pequenos delays bloqueantes; não há confirmação física da dose.
 - Configurações padrão são apenas exemplos ilustrativos.
 
 ## Próximos testes recomendados
 
-Compilação, testes reais em ESP8266/OLED, persistência após desligamento, acesso em Android e iPhone via hotspot, comportamento do mDNS, reinício sem Wi-Fi, alarmes em virada do dia e revisão do circuito do buzzer.
+Compilação, testes em ESP8266 com OLED e LEDs, persistência após desligamento, acesso em Android e iPhone via hotspot, comportamento do mDNS, reinício sem Wi-Fi e alertas na virada do dia.
 
 > ⚠️ Protótipo educacional, não é dispositivo médico certificado e não deve ser o único sistema de lembrete.
