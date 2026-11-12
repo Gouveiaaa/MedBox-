@@ -23,6 +23,7 @@ void testarLeds();
 void paginaLogin(bool invalido, bool bloqueado);
 void atualizarOled(bool forcar);
 void confirmarDose();
+void desfazerConfirmacao();
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -142,15 +143,43 @@ bool persistirConfirmacao(const ConfirmacaoDose &novo) {
   adicionarConfirmacao(novo);
   return true;
 }
-bool confirmadaHoje(uint8_t indice,uint32_t dia) {
-  if(indice>=3)return false;
-  uint16_t horario=gavetas[indice].hora*60+gavetas[indice].minuto;
-  for(uint8_t i=0;i<totalConfirmacoes;i++){
+// Encontra exatamente o registro que corresponde a esta gaveta, horario e dia.
+int localizarConfirmacaoHoje(uint8_t indice,uint32_t dia) {
+  if(indice>=3 || gavetas[indice].hora>=24)return -1;
+  const uint16_t horario=gavetas[indice].hora*60+gavetas[indice].minuto;
+  for(int i=totalConfirmacoes-1;i>=0;i--){
     const ConfirmacaoDose &r=confirmacoes[i];
-    if(r.gaveta==indice&&r.minutoProgramado==horario&&
-       r.instanteLocal/86400UL==dia)return true;
+    if(r.gaveta==indice && r.minutoProgramado==horario &&
+       r.instanteLocal/86400UL==dia)return i;
   }
-  return false;
+  return -1;
+}
+bool confirmadaHoje(uint8_t indice,uint32_t dia) {
+  return localizarConfirmacaoHoje(indice,dia)>=0;
+}
+
+// So altera o historico em RAM depois que a gravacao na flash for concluida.
+bool removerConfirmacaoPersistida(uint8_t posicao) {
+  if(!armazenamentoDisponivel || posicao>=totalConfirmacoes)return false;
+  File f=LittleFS.open("/confirmacoes.tmp","w");
+  if(!f)return false;
+  bool gravou=true;
+  for(uint8_t i=0;i<totalConfirmacoes;i++){
+    if(i==posicao)continue;
+    const ConfirmacaoDose &r=confirmacoes[i];
+    const String linha=String(r.instanteLocal)+"|"+String(r.gaveta)+"|"+
+                      String(r.minutoProgramado)+"|"+r.medicamento;
+    if(f.println(linha)==0)gravou=false;
+  }
+  f.flush();
+  f.close();
+  if(!gravou || !LittleFS.rename("/confirmacoes.tmp","/confirmacoes.txt")){
+    LittleFS.remove("/confirmacoes.tmp");
+    return false;
+  }
+  for(uint8_t i=posicao+1;i<totalConfirmacoes;i++)confirmacoes[i-1]=confirmacoes[i];
+  totalConfirmacoes--;
+  return true;
 }
 
 
@@ -599,6 +628,48 @@ void confirmarDose() {
   atualizarOled(true);
   redirecionar("/#historico");
 }
+// Desmarca uma confirmacao feita por engano, mesmo que seja de dia anterior.
+// Revalida todos os identificadores para nao apagar outro registro se a tela
+// estiver desatualizada. A acao nao dispara novamente o LED.
+void desfazerConfirmacao() {
+  if(!autorizado() || !csrfValido())return;
+  if(!armazenamentoDisponivel){
+    cabecalhosSemCache();
+    server.send(503,"text/plain; charset=utf-8",
+                "Armazenamento indisponivel. Confirmacao nao alterada.");
+    return;
+  }
+  const String posStr=server.arg("registro");
+  if(!inteiroValido(posStr,0,MAX_CONFIRMACOES-1)){
+    cabecalhosSemCache();
+    server.send(400,"text/plain; charset=utf-8","Registro invalido");
+    return;
+  }
+  uint8_t pos=(uint8_t)posStr.toInt();
+  if(pos>=totalConfirmacoes){
+    cabecalhosSemCache();
+    server.send(409,"text/plain; charset=utf-8","Registro nao encontrado. Atualize o painel.");
+    return;
+  }
+  const ConfirmacaoDose &r=confirmacoes[pos];
+  if(server.arg("instante")!=String(r.instanteLocal) ||
+     server.arg("gaveta")!=String(r.gaveta) ||
+     server.arg("horario")!=String(r.minutoProgramado)){
+    cabecalhosSemCache();
+    server.send(409,"text/plain; charset=utf-8","O historico mudou. Atualize o painel.");
+    return;
+  }
+  if(!removerConfirmacaoPersistida(pos)){
+    cabecalhosSemCache();
+    server.send(500,"text/plain; charset=utf-8",
+                "Nao foi possivel desmarcar. O registro original foi preservado.");
+    return;
+  }
+  // Mantem ultimoDia: desfazer nao reinicia um LED passado nem altera horários.
+  atualizarOled(true);
+  redirecionar("/#historico");
+}
+
 void raiz() {
   if (!autorizado()) return;
   const bool horarioOK=horaSincronizada;
@@ -621,6 +692,11 @@ a{color:inherit;text-decoration:none}
 .history-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #e6ecf3;font-size:13px}
 .history-row small{color:#687b94;white-space:nowrap}
 .history-row b{color:#155a38}
+.undoform{margin-top:8px}
+.undobtn{width:100%;min-height:38px;background:#fff;color:#a13a49;border:1px solid #dfb7bf;font-size:13px}
+.history-undo{flex:0 0 118px;text-align:right}
+.history-undo .undobtn{margin-top:7px}
+@media(max-width:410px){.history-row{flex-direction:column}.history-undo{width:100%;flex:auto;text-align:left}}
 header{background:linear-gradient(105deg,#155aaf,#217acb);color:#fff;padding:14px 24px}
 .head{max-width:1500px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .logo{display:flex;align-items:center;gap:14px}
@@ -707,7 +783,9 @@ footer{font-size:12px;color:#718096;text-align:center;padding-bottom:12px}
   for (uint8_t i=0;i<3;i++) {
     const Gaveta &g=gavetas[i];
     const bool cadastrada=(g.hora<24 && g.remedio.length()>0);
-    const bool confirmada=cadastrada && horarioOK && confirmadaHoje(i,diaAtual);
+    const int posConfirmacao=cadastrada && horarioOK ?
+                           localizarConfirmacaoHoje(i,diaAtual) : -1;
+    const bool confirmada=posConfirmacao>=0;
     const bool disponivel=cadastrada && horarioOK && !confirmada &&
                            minutoAtual>=g.hora*60+g.minuto;
     html+=F("<section class='card drawer dose' data-min='");
@@ -754,6 +832,20 @@ footer{font-size:12px;color:#718096;text-align:center;padding-bottom:12px}
       html+=F("'><button type='submit' class='confirmbtn'");
       if(!disponivel)html+=F(" disabled");
       html+=F(">✓ Confirmar dose tomada</button></form>");
+    }
+    if(confirmada){
+      const ConfirmacaoDose &reg=confirmacoes[posConfirmacao];
+      html+=F("<form class='undoform' method='post' action='/desfazer-confirmacao'><input type='hidden' name='csrf' value='");
+      html+=csrfToken;
+      html+=F("'><input type='hidden' name='registro' value='");
+      html+=String(posConfirmacao);
+      html+=F("'><input type='hidden' name='instante' value='");
+      html+=String(reg.instanteLocal);
+      html+=F("'><input type='hidden' name='gaveta' value='");
+      html+=String(reg.gaveta);
+      html+=F("'><input type='hidden' name='horario' value='");
+      html+=String(reg.minutoProgramado);
+      html+=F("'><button type='submit' class='undobtn'>↶ Desfazer confirmação</button></form>");
     }
     html+=F("<div class='buttons'><button type='button' class='blue edit'>✎ Editar</button>");
     html+=F("<form action='/limpar' method='post'><input type='hidden' name='csrf' value='");
@@ -807,9 +899,19 @@ footer{font-size:12px;color:#718096;text-align:center;padding-bottom:12px}
       html+=String(reg.gaveta+1);
       html+=F("</b><div>");
       html+=escapeHtml(reg.medicamento);
-      html+=F("</div></div><small>");
+      html+=F("</div></div><div class='history-undo'><small>");
       html+=String(carimbo);
-      html+=F("</small></div>");
+      html+=F("</small><form class='undoform' method='post' action='/desfazer-confirmacao'><input type='hidden' name='csrf' value='");
+      html+=csrfToken;
+      html+=F("'><input type='hidden' name='registro' value='");
+      html+=String(i);
+      html+=F("'><input type='hidden' name='instante' value='");
+      html+=String(reg.instanteLocal);
+      html+=F("'><input type='hidden' name='gaveta' value='");
+      html+=String(reg.gaveta);
+      html+=F("'><input type='hidden' name='horario' value='");
+      html+=String(reg.minutoProgramado);
+      html+=F("'><button class='undobtn' type='submit'>↶ Desfazer</button></form></div></div>");
     }
   }
   html+=F(R"MBUI(</section>
@@ -863,6 +965,11 @@ footer{font-size:12px;color:#718096;text-align:center;padding-bottom:12px}
  document.querySelectorAll('.confirmform').forEach(function(form){
   form.addEventListener('submit',function(e){
    if(!window.confirm('Confirma que esta dose foi tomada? O registro sera manual.'))e.preventDefault();
+  });
+ });
+ document.querySelectorAll('.undoform').forEach(function(form){
+  form.addEventListener('submit',function(e){
+   if(!window.confirm('Desfazer esta confirmacao? A dose voltara a ficar pendente. Os LEDs nao serao religados.'))e.preventDefault();
   });
  });
  document.querySelectorAll('.edit').forEach(function(b){
@@ -939,6 +1046,7 @@ class MedBoxRouteHandler : public RequestHandler {
     else if (method == HTTP_POST && uri == "/silenciar") silenciar();
     else if (method == HTTP_POST && uri == "/testar-leds") testarLeds();
     else if (method == HTTP_POST && uri == "/confirmar-dose") confirmarDose();
+    else if (method == HTTP_POST && uri == "/desfazer-confirmacao") desfazerConfirmacao();
     else {
       if (!autorizado()) return true;
       cabecalhosSemCache();
