@@ -6,15 +6,16 @@ Protótipo educacional de caixa de medicamentos com **3 gavetas manuais**, ESP82
 
 ## Funcionalidades implementadas no firmware
 
-- Cadastro do nome de medicamento, hora e minuto para cada uma das três gavetas.
+- Cadastro do nome de medicamento, hora e minuto para cada uma das três gavetas. Novas instalações começam sem horários fictícios cadastrados.
 - Painel web responsivo: cartões empilhados no celular e distribuídos conforme a largura em PC/tablet.
 - **Tela de login própria antes do painel**, com usuário e senha; sessão temporária (30 minutos de inatividade), botão Sair, proteção de formulários (CSRF) e bloqueio temporário após cinco falhas.
 - Persistência de nomes e horários no **LittleFS** do ESP8266.
-- Botão **Silenciar alarmes de hoje**.
+- Botão **Silenciar LEDs atuais** (não cancela lembretes futuros), **Testar LEDs** e **Limpar** cada gaveta.
 - Aviso no OLED e LED da gaveta piscando por um minuto no horário programado.
 - Sincronização NTP com `a.st1.ntp.br`, fuso fixo UTC-3.
 - Reconexão Wi-Fi e inicialização do painel web após a rede voltar (a validar na placa).
-- Suporte opcional a buzzer ativo de baixa corrente, desabilitado por segurança até testar o circuito.
+- **Sem som nem buzzer:** alertas exclusivamente luminosos. Teste integrado dos LEDs por gaveta (3 segundos cada), e botão para interromper LEDs atualmente ativos.
+- Painel com relógio NTP (quando sincronizado), próximo medicamento, cronômetro e cartões para editar/limpar os horários. Sem alegar automaticamente que o medicamento foi ingerido.
 - Acesso pelo **IP local** e anúncio mDNS como **medbox.local** quando disponível.
 
 ## Hardware e conexões propostas
@@ -22,10 +23,9 @@ Protótipo educacional de caixa de medicamentos com **3 gavetas manuais**, ESP82
 | Componente | Conexão na configuração padrão |
 |---|---|
 | HW-364A com OLED SSD1306 integrado, 128×64 | SDA D6 (GPIO14), SCL D5 (GPIO12), endereço `0x3C` |
-| LED azul, gaveta 1 | D1 (GPIO5) |
-| LED vermelho, gaveta 2 | D2 (GPIO4) |
+| LED vermelho, gaveta 1 | D1 (GPIO5) |
+| LED azul, gaveta 2 | D2 (GPIO4) |
 | LED verde, gaveta 3 | D7 (GPIO13) |
-| Buzzer ativo opcional | D0 (GPIO16), **desabilitado** no código até validar o circuito |
 | 3 resistores de 220 Ω e jumpers | Um resistor em série por LED, com o cátodo de cada LED ligado ao GND |
 
 O firmware agora usa **por padrão a pinagem HW-364A**. Confirme no hardware antes de conectar LEDs ou buzzer, pois existem revisões e placas com pinagem diferente. Veja [ligações e cuidados](docs/instalacao.md#2-ligações-propostas).
