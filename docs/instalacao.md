@@ -63,7 +63,7 @@ Conecte o aparelho à mesma rede local do ESP8266 e abra:
 - `http://medbox.local`, caso o mDNS seja suportado pelo hotspot e navegador;
 - `http://IP_DO_ESP8266`, usando o IP visto no OLED ou Monitor Serial.
 
-O painel usa layout responsivo: no celular os cartões ficam em coluna; em PC, podem aparecer lado a lado. Ao entrar, informe o usuário e a senha definidos no `secrets.h`.
+Ao abrir o endereço, **a primeira página é a tela `Entrar no MedBox`**, antes de qualquer horário ou medicamento. Informe o usuário e a senha de `secrets.h`. Após entrar, surge o painel responsivo das três gavetas. Use **Sair da conta** para encerrar a sessão; a sessão também vence após 30 minutos sem acessar o painel. Não há cadastro público de usuários nem senha padrão funcional: configure a senha em `secrets.h` antes de gravar o ESP8266.
 
 **Hotspot:** alguns celulares não permitem que o aparelho que fornece a rede acesse seus próprios clientes, e alguns bloqueiam mDNS. Se necessário, use um segundo celular ou notebook conectado ao hotspot e o IP numérico.
 
@@ -84,4 +84,4 @@ Se a gravação falhar com `Connecting...` / `Timed out waiting for packet heade
 - **LED apagado durante o aviso:** confira a polaridade, o resistor, o jumper, o GND e a coluna de pinagem selecionada.
 - **Horários não persistem:** confira a inicialização e funcionamento do LittleFS.
 
-**Segurança:** HTTP Basic não criptografa credenciais. Use rede confiável e nunca publique `secrets.h` ou exponha a porta 80 à internet.
+**Segurança:** o formulário de login e o cookie de sessão trafegam por **HTTP sem TLS**. O cookie possui atributos `HttpOnly` e `SameSite=Strict`, mas eles não impedem interceptação em rede local insegura. Use rede Wi-Fi confiável e senha exclusiva, não publique `secrets.h` e nunca exponha a porta 80 à internet. O servidor permite uma sessão ativa; outro login encerra a anterior. Depois de cinco tentativas erradas, o login fica bloqueado por um minuto.

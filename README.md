@@ -8,7 +8,7 @@ Protótipo educacional de caixa de medicamentos com **3 gavetas manuais**, ESP82
 
 - Cadastro do nome de medicamento, hora e minuto para cada uma das três gavetas.
 - Painel web responsivo: cartões empilhados no celular e distribuídos conforme a largura em PC/tablet.
-- Proteção do painel com **usuário e senha** via autenticação HTTP Basic.
+- **Tela de login própria antes do painel**, com usuário e senha; sessão temporária (30 minutos de inatividade), botão Sair, proteção de formulários (CSRF) e bloqueio temporário após cinco falhas.
 - Persistência de nomes e horários no **LittleFS** do ESP8266.
 - Botão **Silenciar alarmes de hoje**.
 - Aviso no OLED e LED da gaveta piscando por um minuto no horário programado.
@@ -50,7 +50,7 @@ O hotspot pode impedir acesso pelo próprio celular ou descoberta mDNS. Nesses c
 
 O firmware **mantém** os campos `MEDBOX_ADMIN_USER` e `MEDBOX_ADMIN_PASSWORD` e os campos de Wi-Fi `MEDBOX_WIFI_SSID` e `MEDBOX_WIFI_PASSWORD`. Eles são definidos em `secrets.h` local. O arquivo `secrets.example.h` documenta todos os campos sem expor senhas reais.
 
-**Importante:** o painel usa HTTP Basic sobre HTTP sem TLS. Utilize somente redes locais confiáveis e não abra a porta 80 na internet.
+**Importante:** o login usa um formulário próprio e uma sessão por cookie `HttpOnly; SameSite=Strict`, mas o ESP8266 serve **HTTP sem TLS**. Isso **não criptografa** as credenciais nem o cookie na rede. Utilize somente redes locais confiáveis, senhas exclusivas e não exponha a porta 80 na internet. O dispositivo armazena uma sessão por vez e a sessão expira após 30 minutos de inatividade.
 
 ## Estado de validação e limitações
 

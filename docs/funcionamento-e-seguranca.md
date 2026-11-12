@@ -7,7 +7,7 @@
 3. Quando conecta durante a inicialização, sincroniza horário com `a.st1.ntp.br` (UTC-3), inicia servidor HTTP e anuncia `medbox.local` via mDNS.
 4. Exibe o IP no OLED e imprime no Monitor Serial a 115200 baud.
 5. O usuário acessa pelo IP ou por `http://medbox.local` quando a rede suportar mDNS.
-6. O painel solicita **usuário e senha**, definidos em `MEDBOX_ADMIN_USER` e `MEDBOX_ADMIN_PASSWORD`.
+6. A primeira tela é **Entrar no MedBox**. Só depois de autenticar com `MEDBOX_ADMIN_USER` e `MEDBOX_ADMIN_PASSWORD` o painel e os formulários das gavetas ficam acessíveis. O usuário pode encerrar a sessão com **Sair da conta**.
 7. Cada gaveta tem nome, hora e minuto; alterações são salvas no LittleFS.
 8. Quando o horário coincide e o NTP foi sincronizado ao menos uma vez, o OLED mostra o aviso e o LED da gaveta pisca por um minuto. Um buzzer ativo opcional pode alternar junto aos LEDs após configuração elétrica segura. Se mais de uma gaveta tiver o mesmo horário, os LEDs correspondentes piscam e o OLED mostra a última gaveta processada.
 9. O botão **Silenciar alarmes de hoje** apaga os LEDs e desativa os avisos luminosos restantes daquele dia durante a sessão atual.
@@ -27,7 +27,9 @@ O HTML/CSS é servido diretamente pelo ESP8266, sem hospedagem externa. O painel
 
 Esses valores ficam no arquivo **local** `firmware/secrets.h`, criado a partir de `firmware/secrets.example.h`. O Git ignora `secrets.h`, mas não protege senhas que sejam copiadas para outros arquivos ou commits.
 
-A autenticação HTTP Basic **não criptografa** credenciais, pois o servidor usa HTTP sem TLS. Use somente rede local confiável, não encaminhe a porta 80 para a internet e não use senhas reutilizadas de serviços importantes.
+A autenticação agora é feita por página própria (usuário e senha), seguida de uma **sessão temporária no servidor**. O cookie usa `HttpOnly` e `SameSite=Strict`; formulários de salvar horários, silenciar alarmes e sair exigem um token anti-CSRF. A sessão vence após 30 minutos de inatividade, há uma sessão ativa por vez e o login bloqueia novas tentativas por um minuto depois de cinco falhas consecutivas.
+
+**Limitação essencial:** não há TLS no servidor do ESP8266. Usuário, senha e cookie trafegam por HTTP e podem ser interceptados por quem controla a rede; uma tela de login personalizada não equivale a comunicação criptografada. Mantenha o acesso somente em rede local confiável, não encaminhe a porta 80 para a internet, use credenciais exclusivas e não dependa desta proteção em ambientes hostis.
 
 ## Hotspot e medbox.local
 

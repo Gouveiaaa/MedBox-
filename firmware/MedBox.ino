@@ -36,6 +36,14 @@ bool oledDisponivel = false;
 bool horaSincronizada = false;
 bool mdnsAtivo = false;
 bool wifiEstavaConectado = false;
+// Uma sessao de administrador em RAM, expira apos 30 minutos sem requisicoes.
+constexpr unsigned long SESSAO_INATIVIDADE_MS = 30UL * 60UL * 1000UL;
+constexpr unsigned long BLOQUEIO_LOGIN_MS = 60UL * 1000UL;
+String sessaoToken;
+String csrfToken;
+unsigned long ultimaAtividadeSessao = 0;
+unsigned long primeiraFalhaLogin = 0;
+uint8_t falhasLogin = 0;
 bool alarmeSilenciado = false;
 unsigned long ultimaTentativaWiFi = 0;
 unsigned long ultimaTentativaNTP = 0;
@@ -101,10 +109,158 @@ String escapeHtml(const String &s) {
   }
   return r;
 }
-bool autorizado() {
-  if (server.authenticate(MEDBOX_ADMIN_USER, MEDBOX_ADMIN_PASSWORD)) return true;
-  server.requestAuthentication();
+// Sem TLS, estas protecoes valem apenas para uma rede local confiavel.
+void cabecalhosSemCache() {
+  server.sendHeader("Cache-Control", "no-store, max-age=0");
+  server.sendHeader("Pragma", "no-cache");
+  server.sendHeader("X-Content-Type-Options", "nosniff");
+  server.sendHeader("Referrer-Policy", "no-referrer");
+  server.sendHeader("X-Frame-Options", "DENY");
+}
+
+String novoToken() {
+  static const char digitos[] = "0123456789abcdef";
+  uint8_t bytes[16];
+  ESP.random(bytes, sizeof(bytes)); // Fonte de entropia do ESP8266 com Wi-Fi ligado.
+  String token;
+  token.reserve(32);
+  for (uint8_t valor : bytes) {
+    token += digitos[valor >> 4];
+    token += digitos[valor & 15];
+  }
+  return token;
+}
+
+void redirecionar(const char* caminho) {
+  cabecalhosSemCache();
+  server.sendHeader("Location", caminho, true);
+  server.send(303, "text/plain", "");
+}
+
+bool cookieDeSessaoValido() {
+  if (sessaoToken.length() != 32) return false;
+  const String cookie = server.header("Cookie");
+  const String nome = "medbox_sid=";
+  int inicio = 0;
+  while (inicio < static_cast<int>(cookie.length())) {
+    int fim = cookie.indexOf(';', inicio);
+    if (fim < 0) fim = cookie.length();
+    String parte = cookie.substring(inicio, fim);
+    parte.trim();
+    if (parte == nome + sessaoToken) return true;
+    inicio = fim + 1;
+  }
   return false;
+}
+
+bool sessaoValida() {
+  if (sessaoToken.length() != 32) return false;
+  if (millis() - ultimaAtividadeSessao >= SESSAO_INATIVIDADE_MS) {
+    sessaoToken = "";
+    csrfToken = "";
+    return false;
+  }
+  if (!cookieDeSessaoValido()) return false;
+  ultimaAtividadeSessao = millis();
+  return true;
+}
+
+bool autorizado() {
+  if (sessaoValida()) return true;
+  redirecionar("/login");
+  return false;
+}
+
+bool csrfValido() {
+  if (csrfToken.length() != 32 || server.arg("csrf") != csrfToken) {
+    cabecalhosSemCache();
+    server.send(403, "text/plain; charset=utf-8", "Solicitacao invalida. Atualize a pagina e tente novamente.");
+    return false;
+  }
+  return true;
+}
+
+void paginaLogin(bool invalido = false, bool bloqueado = false) {
+  String html;
+  html.reserve(3300);
+  html += F(R"MEDBOX(<!doctype html><html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#145bd7"><title>MedBox | Entrar</title>
+<style>
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;min-height:100dvh;display:grid;place-items:center;background:#f5f7fb;color:#17233b;font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:22px}
+main{width:100%;max-width:410px;background:#fff;border:1px solid #e3e8f1;border-radius:18px;padding:32px;box-shadow:0 18px 54px #17294a12}
+.logo{height:48px;width:48px;display:grid;place-items:center;border-radius:14px;background:#145bd7;color:white;font-size:29px;font-weight:800;margin-bottom:20px}
+h1{font-size:26px;letter-spacing:-.7px;margin:0;color:#142643}
+p{color:#64748b;font-size:14px;margin:7px 0 23px}
+label{display:block;font-size:13px;font-weight:650;margin:14px 0 6px;color:#394a62}
+input{display:block;width:100%;min-width:0;background:white;border:1px solid #ccd5e3;border-radius:10px;padding:12px;font:inherit;font-size:16px;color:#192940}
+input:focus{outline:2px solid #a4c6ff;outline-offset:1px;border-color:#3c7cf5}
+button{display:block;width:100%;min-height:48px;margin-top:23px;border:0;border-radius:10px;background:#145bd7;color:#fff;font:650 16px system-ui;cursor:pointer}
+button:focus-visible{outline:3px solid #9bc4ff;outline-offset:2px}
+.aviso{padding:10px 12px;border-radius:9px;border:1px solid #f1c6c9;background:#fff4f4;color:#982c3a;font-size:13px}
+footer{text-align:center;color:#7a879b;font-size:12px;margin-top:23px}
+@media(max-width:420px){main{padding:25px 22px}}
+</style></head><body><main><div class="logo" aria-hidden="true">+</div>
+<h1>Entrar no MedBox</h1><p>Identifique-se para acessar suas gavetas e horários.</p>)MEDBOX");
+  if (bloqueado) {
+    html += F("<div class='aviso' role='alert'>Muitas tentativas. Tente novamente em 1 minuto.</div>");
+  } else if (invalido) {
+    html += F("<div class='aviso' role='alert'>Usuario ou senha incorretos.</div>");
+  }
+  html += F(R"MEDBOX(<form method="post" action="/login">
+<label for="usuario">Usuário</label><input id="usuario" name="usuario" maxlength="64" autocomplete="username" required autofocus>
+<label for="senha">Senha</label><input id="senha" name="senha" type="password" maxlength="128" autocomplete="current-password" required>
+<button type="submit">Entrar</button></form>
+<footer>Acesso reservado aos responsáveis pelo MedBox</footer></main></body></html>)MEDBOX");
+  cabecalhosSemCache();
+  server.send(200, "text/html; charset=utf-8", html);
+}
+
+void mostrarLogin() {
+  if (sessaoValida()) {
+    redirecionar("/");
+    return;
+  }
+  paginaLogin();
+}
+
+void enviarLogin() {
+  // Rate limit simples na memoria para desencorajar tentativas repetidas.
+  const unsigned long agora = millis();
+  if (falhasLogin > 0 && agora - primeiraFalhaLogin >= BLOQUEIO_LOGIN_MS) {
+    falhasLogin = 0;
+  }
+  if (falhasLogin >= 5) {
+    paginaLogin(false, true);
+    return;
+  }
+  String usuario = server.arg("usuario");
+  String senha = server.arg("senha");
+  if (usuario == MEDBOX_ADMIN_USER && senha == MEDBOX_ADMIN_PASSWORD) {
+    falhasLogin = 0;
+    sessaoToken = novoToken();
+    csrfToken = novoToken();
+    ultimaAtividadeSessao = millis();
+    cabecalhosSemCache();
+    server.sendHeader("Set-Cookie", "medbox_sid=" + sessaoToken + "; Path=/; HttpOnly; SameSite=Strict");
+    server.sendHeader("Location", "/", true);
+    server.send(303, "text/plain", "");
+    return;
+  }
+  if (falhasLogin == 0) primeiraFalhaLogin = agora;
+  falhasLogin++;
+  paginaLogin(true, falhasLogin >= 5);
+}
+
+void sair() {
+  if (!autorizado() || !csrfValido()) return;
+  sessaoToken = "";
+  csrfToken = "";
+  cabecalhosSemCache();
+  server.sendHeader("Set-Cookie", "medbox_sid=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict");
+  server.sendHeader("Location", "/login", true);
+  server.send(303, "text/plain", "");
 }
 void atualizarLeds() {
   const unsigned long agora = millis();
@@ -127,7 +283,7 @@ void atualizarLeds() {
   }
 }
 void silenciar() {
-  if (!autorizado()) return;
+  if (!autorizado() || !csrfValido()) return;
   alarmeSilenciado = true;
   atualizarLeds();
   server.sendHeader("Location","/",true);
@@ -181,18 +337,22 @@ button:active{filter:brightness(.92)}
 .actions form{width:230px;flex:none}
 .actions button{margin:0;background:#fff;color:#a52e40;border:1px solid #e9bfc8}
 .actions button:hover{background:#fff2f4}
+.logout{max-width:180px;margin:18px 0 0 auto}
+.logout button{background:transparent;border:1px solid #d9e1ee;color:#455875;margin:0;font-size:13px;min-height:39px}
 footer{font-size:12px;color:#75839a;text-align:center;margin:23px 0 0}
 @media(max-width:800px){.grid{grid-template-columns:1fr}.actions{align-items:stretch;flex-direction:column}.actions form{width:100%}main{padding:24px 16px 20px}.wrap{padding:0 16px}}
 @media(max-width:380px){.secure{font-size:0;padding:7px 10px}.secure:before{content:"🔒";font-size:15px}}
 </style></head><body>
-<header><div class="wrap top"><div class="brand"><span class="symbol" aria-hidden="true">+</span><div><div class="brand-name">MedBox</div><div class="brand-caption">Painel de medicamentos</div></div></div><span class="secure">🔒 Acesso protegido</span></div></header>
+<header><div class="wrap top"><div class="brand"><span class="symbol" aria-hidden="true">+</span><div><div class="brand-name">MedBox</div><div class="brand-caption">Painel de medicamentos</div></div></div><div class="secure">🔒 Acesso protegido</div></div></header>
 <main><div class="lead"><h1>Suas gavetas</h1><p>Defina o medicamento e o horário de cada gaveta.</p></div>
 <div class="grid">)MEDBOX");
   for (int i = 0; i < 3; i++) {
     html+=F("<section class='card gaveta-"); html+=String(i+1);
     html+=F("'><div class='card-title'><span class='dot' aria-hidden='true'></span><h2>Gaveta ");
     html+=String(i+1);
-    html+=F("</h2><small>Alerta 1 min</small></div><form action='/salvar' method='post'><input type='hidden' name='index' value='");
+    html+=F("</h2><small>Alerta 1 min</small></div><form action='/salvar' method='post'><input type='hidden' name='csrf' value='");
+    html+=csrfToken;
+    html+=F("'><input type='hidden' name='index' value='");
     html+=String(i);
     html+=F("'><label for='rem");html+=String(i);html+=F("'>Medicamento</label><input id='rem");html+=String(i);
     html+=F("' name='remedio' maxlength='40' required autocomplete='off' value='");
@@ -208,13 +368,19 @@ footer{font-size:12px;color:#75839a;text-align:center;margin:23px 0 0}
     html+=F("'></div></div><button type='submit'>Salvar horário</button></form></section>");
   }
   html+=F(R"MEDBOX(</div><section class="card actions"><div><h2>Controle de alarmes</h2><p>O LED de cada gaveta pisca durante 1 minuto no horário definido.</p></div>
-<form action="/silenciar" method="post"><button type="submit">Silenciar alarmes de hoje</button></form></section>
+<form action="/silenciar" method="post"><input type="hidden" name="csrf" value=")MEDBOX");
+  html+=csrfToken;
+  html+=F(R"MEDBOX("><button type="submit">Silenciar alarmes de hoje</button></form></section>
+<form class="logout" action="/sair" method="post"><input type="hidden" name="csrf" value=")MEDBOX");
+  html+=csrfToken;
+  html+=F(R"MEDBOX("><button type="submit">Sair da conta</button></form>
 <footer>Protótipo educacional. Mantenha também outro lembrete de medicamentos.</footer></main></body></html>)MEDBOX");
+  cabecalhosSemCache();
   server.send(200,"text/html; charset=utf-8",html);
 }
 
 void salvar() {
-  if(!autorizado()) return;
+  if (!autorizado() || !csrfValido()) return;
   String idx=server.arg("index"), h=server.arg("hora"), m=server.arg("minuto");
   String nome=server.arg("remedio");
   nome.trim();
@@ -269,9 +435,18 @@ void setup() {
     Serial.println(F("OLED indisponivel: confira SDA, SCL e endereco I2C"));
   }
   tela("Conectando Wi-Fi...","","");
+  server.collectHeaders("Cookie");
   server.on("/", HTTP_GET, raiz);
+  server.on("/login", HTTP_GET, mostrarLogin);
+  server.on("/login", HTTP_POST, enviarLogin);
+  server.on("/sair", HTTP_POST, sair);
   server.on("/salvar", HTTP_POST, salvar);
   server.on("/silenciar", HTTP_POST, silenciar);
+  server.onNotFound([]() {
+    if (!autorizado()) return;
+    cabecalhosSemCache();
+    server.send(404, "text/plain; charset=utf-8", "Pagina nao encontrada");
+  });
   timeClient.begin();
   WiFi.mode(WIFI_STA);
   WiFi.begin(MEDBOX_WIFI_SSID,MEDBOX_WIFI_PASSWORD);
