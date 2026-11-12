@@ -12,6 +12,7 @@ Protótipo educacional de caixa de medicamentos com **3 gavetas manuais**, ESP82
 - Persistência de nomes e horários no **LittleFS** do ESP8266.
 - **Confirmação manual de cada dose pelo site:** somente após o horário agendado, o responsável pode registrar a dose, encerrar apenas o LED daquela gaveta e consultar histórico local de até 24 confirmações. Essa ação não comprova que o remédio foi ingerido.
 - Situações da dose: agendada, horário passou (aguardando confirmação), ou confirmada manualmente no dia. O OLED mostra a quantidade confirmada e as gavetas ativas.
+- **Desfazer confirmação** na própria gaveta e no histórico (inclusive registro de outro dia, se ainda constar entre os 24 recentes). Reverte apenas a marcação escolhida, atualiza o histórico e o OLED, sem religar automaticamente o LED.
 - Botão **Silenciar LEDs atuais** (não cancela lembretes futuros), **Testar LEDs** e **Limpar** cada gaveta.
 - **OLED automático:** mostra continuamente o horário local (após NTP), a próxima gaveta/medicamento, horário e tempo restante; nomes e horários alterados no site aparecem sem recompilar. Durante o lembrete, mostra a gaveta e o medicamento e depois retorna à tela principal.
 - Aviso no OLED e LED da gaveta piscando por um minuto no horário programado.
