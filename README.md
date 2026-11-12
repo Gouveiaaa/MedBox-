@@ -10,6 +10,8 @@ Protótipo educacional de caixa de medicamentos com **3 gavetas manuais**, ESP82
 - Painel web responsivo: cartões empilhados no celular e distribuídos conforme a largura em PC/tablet.
 - **Tela de login própria antes do painel**, com usuário e senha; sessão temporária (30 minutos de inatividade), botão Sair, proteção de formulários (CSRF) e bloqueio temporário após cinco falhas.
 - Persistência de nomes e horários no **LittleFS** do ESP8266.
+- **Confirmação manual de cada dose pelo site:** somente após o horário agendado, o responsável pode registrar a dose, encerrar apenas o LED daquela gaveta e consultar histórico local de até 24 confirmações. Essa ação não comprova que o remédio foi ingerido.
+- Situações da dose: agendada, horário passou (aguardando confirmação), ou confirmada manualmente no dia. O OLED mostra a quantidade confirmada e as gavetas ativas.
 - Botão **Silenciar LEDs atuais** (não cancela lembretes futuros), **Testar LEDs** e **Limpar** cada gaveta.
 - **OLED automático:** mostra continuamente o horário local (após NTP), a próxima gaveta/medicamento, horário e tempo restante; nomes e horários alterados no site aparecem sem recompilar. Durante o lembrete, mostra a gaveta e o medicamento e depois retorna à tela principal.
 - Aviso no OLED e LED da gaveta piscando por um minuto no horário programado.
