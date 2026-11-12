@@ -11,6 +11,7 @@ Protótipo educacional de caixa de medicamentos com **3 gavetas manuais**, ESP82
 - **Tela de login própria antes do painel**, com usuário e senha; sessão temporária (30 minutos de inatividade), botão Sair, proteção de formulários (CSRF) e bloqueio temporário após cinco falhas.
 - Persistência de nomes e horários no **LittleFS** do ESP8266.
 - Botão **Silenciar LEDs atuais** (não cancela lembretes futuros), **Testar LEDs** e **Limpar** cada gaveta.
+- **OLED automático:** mostra continuamente o horário local (após NTP), a próxima gaveta/medicamento, horário e tempo restante; nomes e horários alterados no site aparecem sem recompilar. Durante o lembrete, mostra a gaveta e o medicamento e depois retorna à tela principal.
 - Aviso no OLED e LED da gaveta piscando por um minuto no horário programado.
 - Sincronização NTP com `a.st1.ntp.br`, fuso fixo UTC-3.
 - Reconexão Wi-Fi e inicialização do painel web após a rede voltar (a validar na placa).
@@ -54,7 +55,7 @@ O firmware **mantém** os campos `MEDBOX_ADMIN_USER` e `MEDBOX_ADMIN_PASSWORD` e
 
 ## Estado de validação e limitações
 
-O comportamento dos LEDs e do OLED foi verificado com periféricos simulados em C++. **A compilação para ESP8266 e o teste na placa estão pendentes.**
+O firmware é compilado no GitHub Actions para ESP8266 e já compilou no ArduinoDroid em versão anterior. **O OLED automático desta atualização ainda precisa ser testado fisicamente na HW-364A.**
 
 - O servidor web agora tenta iniciar ao voltar a conexão mesmo após falha de Wi-Fi no boot; comportamento ainda não validado em hardware.
 - O mDNS é reinicializado nas reconexões, mas pode não funcionar em todos os hotspots ou revisões.

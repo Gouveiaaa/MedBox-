@@ -19,6 +19,7 @@ void limparGaveta();
 void silenciar();
 void testarLeds();
 void paginaLogin(bool invalido, bool bloqueado);
+void atualizarOled(bool forcar);
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -109,6 +110,122 @@ void tela(const String &a, const String &b, const String &c) {
   display.setCursor(0, 48); display.println(c);
   display.display();
 }
+// Adafruit GFX usa fonte ASCII: translitera caracteres portugueses e corta
+// nomes longos para nao estourar a largura fisica do display 128x64.
+String textoOled(const String &entrada, uint8_t limite) {
+  String saida;
+  saida.reserve(limite);
+  for (unsigned int i=0; i<entrada.length() && saida.length()<limite; i++) {
+    uint8_t c=(uint8_t)entrada[i];
+    if (c>=32 && c<=126) {
+      saida+=(char)c;
+    } else if (c==0xC3 && i+1<entrada.length()) {
+      uint8_t d=(uint8_t)entrada[++i];
+      char letra='?';
+      if ((d>=0xA0 && d<=0xA5)) letra='a';
+      else if (d>=0x80 && d<=0x85) letra='A';
+      else if (d>=0xA8 && d<=0xAB) letra='e';
+      else if (d>=0x88 && d<=0x8B) letra='E';
+      else if (d>=0xAC && d<=0xAF) letra='i';
+      else if (d>=0x8C && d<=0x8F) letra='I';
+      else if (d>=0xB2 && d<=0xB6) letra='o';
+      else if (d>=0x92 && d<=0x96) letra='O';
+      else if (d>=0xB9 && d<=0xBC) letra='u';
+      else if (d>=0x99 && d<=0x9C) letra='U';
+      else if (d==0xA7) letra='c';
+      else if (d==0x87) letra='C';
+      saida+=letra;
+    } else if (c>=0x80) {
+      // Pula bytes de continuacao UTF-8; desconhecidos viram '?'.
+      if ((c&0xC0)==0x80) continue;
+      saida+='?';
+    }
+  }
+  return saida;
+}
+
+// OLED principal: relogio e proximo lembrete atualizados automaticamente.
+// Alerta real tem prioridade durante os mesmos 60 segundos de pisca do LED.
+void atualizarOled(bool forcar) {
+  if (!oledDisponivel) return;
+  static unsigned long ultimaAtualizacao=0;
+  unsigned long agora=millis();
+  if (!forcar && agora-ultimaAtualizacao<1000UL) return;
+  ultimaAtualizacao=agora;
+
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  display.print(F("MEDBOX"));
+
+  if (horaSincronizada) {
+    char horario[9];
+    snprintf(horario, sizeof(horario), "%02d:%02d:%02d",
+             timeClient.getHours(), timeClient.getMinutes(), timeClient.getSeconds());
+    display.setCursor(78,0);
+    display.print(horario);
+  } else {
+    display.setCursor(78,0);
+    display.print(F("--:--:--"));
+  }
+  display.drawFastHLine(0,10,128,SSD1306_WHITE);
+
+  int8_t ativa=-1;
+  for (uint8_t i=0;i<3;i++) {
+    if (gavetas[i].alertaLedAtivo) { ativa=i; break; }
+  }
+  if (ativa>=0) {
+    display.setCursor(0,16); display.print(F("HORA DO REMEDIO!"));
+    display.setCursor(0,29); display.print(F("Gaveta ")); display.print(ativa+1);
+    display.setCursor(0,42); display.print(textoOled(gavetas[ativa].remedio,21));
+    display.setCursor(0,55); display.print(F("LED por 1 min"));
+  } else if (!horaSincronizada) {
+    display.setCursor(0,16); display.print(F("Aguardando horario NTP"));
+    display.setCursor(0,30);
+    display.print(WiFi.status()==WL_CONNECTED ? F("Wi-Fi conectado") : F("Conectando Wi-Fi"));
+    display.setCursor(0,45); display.print(F("Proximo: sem hora"));
+  } else {
+    int8_t proxima=-1;
+    uint16_t espera=1441;
+    const uint16_t minutoAtual=timeClient.getHours()*60+timeClient.getMinutes();
+    for (uint8_t i=0;i<3;i++) {
+      const Gaveta &g=gavetas[i];
+      if (g.hora>=24 || g.remedio.length()==0) continue;
+      uint16_t agendado=g.hora*60+g.minuto;
+      uint16_t falta=(agendado+1440-minutoAtual)%1440;
+      if (falta==0) falta=1440; // Ja nao esta em alerta: proximo e amanha.
+      if (falta<espera) { espera=falta; proxima=i; }
+    }
+    if (proxima<0) {
+      display.setCursor(0,18); display.print(F("Nenhuma gaveta ativa"));
+      display.setCursor(0,34); display.print(F("Cadastre pelo site"));
+    } else {
+      const Gaveta &g=gavetas[proxima];
+      display.setCursor(0,16); display.print(F("Prox: Gaveta ")); display.print(proxima+1);
+      display.setCursor(0,29);
+      if (g.hora<10) display.print('0');
+      display.print(g.hora); display.print(':');
+      if (g.minuto<10) display.print('0');
+      display.print(g.minuto);
+      display.print(F(" em "));
+      display.print(espera/60);
+      display.print(F("h"));
+      display.print(espera%60);
+      display.print(F("m"));
+      display.setCursor(0,42); display.print(textoOled(g.remedio,21));
+    }
+    display.setCursor(0,55);
+    if (WiFi.status()==WL_CONNECTED) {
+      display.print(F("IP "));
+      display.print(WiFi.localIP());
+    } else {
+      display.print(F("Wi-Fi desconectado"));
+    }
+  }
+  display.display();
+}
+
 String escapeHtml(const String &s) {
   String r;
   for (unsigned int i=0; i<s.length(); i++) {
@@ -330,6 +447,7 @@ void limparGaveta() {
   gavetas[i].alertaLedAtivo=false;
   salvarConfiguracao();
   atualizarLeds();
+  atualizarOled(true);
   redirecionar("/#gavetas");
 }
 
@@ -339,6 +457,7 @@ void silenciar() {
   testeLedsAtivo=false;
   for (uint8_t i=0; i<3; i++) gavetas[i].alertaLedAtivo=false;
   atualizarLeds();
+  atualizarOled(true);
   redirecionar("/#alertas");
 }
 bool inteiroValido(const String &s, int minV, int maxV) {
@@ -564,7 +683,7 @@ void salvar() {
   gavetas[i].ultimoDia=-1;
   gavetas[i].alertaLedAtivo = false;
   salvarConfiguracao();
-  tela("Gaveta "+String(i+1)+" salva",nome,h+":"+m);
+  atualizarOled(true); // Imediato, sem regravar o firmware ao editar pelo site.
   server.sendHeader("Location","/",true);
   server.send(303,"text/plain","");
 }
@@ -643,6 +762,7 @@ void setup() {
     wifiEstavaConectado = true;
     iniciarServicosWeb();
     horaSincronizada = timeClient.forceUpdate();
+    atualizarOled(true);
   } else {
     // Continua procurando a rede no loop e inicia o painel quando ela voltar.
     tela("Wi-Fi indisponivel", "Tentando reconectar", "rede 2.4 GHz");
@@ -684,12 +804,12 @@ void loop() {
     for(int i=0;i<3;i++) {
       if(h==gavetas[i].hora && m==gavetas[i].minuto && gavetas[i].ultimoDia!=dia) {
         gavetas[i].ultimoDia=dia;
-        tela("HORA DO REMEDIO!","Gaveta "+String(i+1),gavetas[i].remedio);
         testeLedsAtivo=false; // Um lembrete verdadeiro tem prioridade sobre um teste.
         gavetas[i].inicioAlertaLed = millis();
         gavetas[i].alertaLedAtivo = true;
       }
     }
   }
+  atualizarOled(false); // Normal, alerta ou retorno automatico apos 60s.
   delay(100);
 }
