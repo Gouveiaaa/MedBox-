@@ -11,7 +11,8 @@
 7. Cada gaveta tem nome, hora e minuto; alterações são salvas no LittleFS.
 8. Quando o horário coincide e o NTP foi sincronizado ao menos uma vez, o OLED mostra a gaveta e o medicamento enquanto o LED pisca por um minuto, **sem som**. Depois retorna automaticamente ao relógio e próximo medicamento. Se mais de uma gaveta tiver o mesmo horário, ambos LEDs piscam (o OLED mostra a primeira gaveta com aviso ativo).
 9. **Silenciar LEDs atuais** interrompe os LEDs em andamento sem cancelar próximos horários. **Testar LEDs** aciona sequencialmente os três LEDs por 3 segundos cada e não altera horários.
-10. As gavetas começam desativadas (sem medicamentos fictícios); o botão **Limpar** desativa individualmente e persiste a alteração no LittleFS. A interface não confirma tomada do medicamento.
+10. As gavetas começam desativadas (sem medicamentos fictícios); o botão **Limpar** desativa individualmente e persiste a alteração no LittleFS.
+11. Após o horário agendado, o responsável pode clicar **Confirmar dose tomada**. O registro guarda o instante local, a gaveta, o medicamento e o horário programado; o LED daquela gaveta para de piscar, sem interromper os demais. O OLED mostra quantas doses foram confirmadas hoje.
 
 ## OLED integrado: atualização automática
 
@@ -46,9 +47,18 @@ A autenticação agora é feita por página própria (usuário e senha), seguida
 - Alguns celulares não conseguem acessar clientes do próprio hotspot. Um segundo dispositivo conectado à rede costuma ser a opção mais previsível.
 - O hotspot precisa fornecer internet para sincronização NTP.
 
+## Confirmação manual e histórico
+
+- O MedBox **não possui sensores de ingestão** e nunca marca doses automaticamente. O botão de confirmação significa somente que alguém autenticado **declarou** ter tomado o medicamento.
+- O servidor só aceita a confirmação **após o horário programado**, com Wi-Fi/NTP sincronizado, LittleFS disponível, sessão e token CSRF válidos. Também verifica o dia e o horário original do formulário.
+- Cada confirmação fica armazenada em `/confirmacoes.txt` na própria HW-364A, em um histórico limitado aos **24 registros mais recentes**; o site mostra os **8 mais recentes**. O arquivo é recriado por escrita temporária e renomeação. Essas informações não são enviadas ao GitHub nem a serviços externos.
+- Uma dose confirmada não dispara novamente naquele dia, mesmo após reinício, desde que o horário daquela gaveta não seja alterado. Um horário que passou e não foi confirmado aparece como **“aguardando confirmação”**, sem afirmar automaticamente que foi esquecido.
+- Somente a programação do **dia atual** pode ser confirmada. A meia-noite inicia um novo dia de registros; não é possível corrigir ou revogar uma confirmação equivocada pelo painel nesta versão.
+- Esta função **não é prova médica**, não detecta abertura de gavetas ou ingestão e não substitui outro lembrete confiável.
+
 ## Persistência e alertas
 
-Os nomes e horários são gravados no LittleFS e podem sobreviver a reinícios. O estado `ultimoDia` de cada gaveta e o silenciamento do dia ficam apenas na RAM, portanto reiniciar pode permitir novo alerta no mesmo dia. O sistema não detecta abertura das gavetas nem ingestão.
+Os nomes, horários e até 24 confirmações recentes são gravados no LittleFS e podem sobreviver a reinícios. O estado `ultimoDia` fica na RAM. Reiniciar pode repetir um alerta **não confirmado** naquele mesmo dia; alertas com confirmação persistida não disparam novamente para o mesmo horário. O sistema não detecta abertura das gavetas nem ingestão.
 
 ## Limitações e pontos a validar
 
