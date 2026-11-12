@@ -15,17 +15,20 @@ No Arduino IDE, adicione o índice de placas `https://arduino.esp8266.com/stable
 
 ## 2. Ligações propostas
 
-| Sinal | Padrão | Alternativa para OLED em D6/D5 |
+| Sinal | HW-364A (padrão atual) | Outra placa com OLED em D2/D1 |
 |---|---|---|
-| OLED SDA | D2 (GPIO4) | D6 (GPIO12) |
-| OLED SCL | D1 (GPIO5) | D5 (GPIO14) |
-| LED azul, gaveta 1 | D5 (GPIO14) | D1 (GPIO5) |
-| LED vermelho, gaveta 2 | D6 (GPIO12) | D2 (GPIO4) |
+| OLED SDA | D6 (GPIO14) | D2 (GPIO4) |
+| OLED SCL | D5 (GPIO12) | D1 (GPIO5) |
+| LED azul, gaveta 1 | D1 (GPIO5) | D1 (GPIO5), **conflito: escolha outro pino** |
+| LED vermelho, gaveta 2 | D2 (GPIO4) | D2 (GPIO4), **conflito: escolha outro pino** |
 | LED verde, gaveta 3 | D7 (GPIO13) | D7 (GPIO13) |
+| Buzzer ativo opcional | D0 (GPIO16), desativado no firmware | Validar circuito |
 
 Com a placa desligada, ligue cada saída ao ânodo (perna longa) do LED por um resistor de 220 Ω. Ligue o cátodo (perna curta) ao GND. Use os jumpers para fazer as conexões e mantenha os GPIOs em 3,3 V.
 
-O OLED já vem ligado na placa. Confirme os pinos e o endereço I²C no manual do modelo. Para a coluna alternativa, mude `OLED_NOS_PINOS_D6_D5` para `true` no início de `MedBox.ino` e use a coluna alternativa também para os LEDs. As duas configurações usam `OLED_ENDERECO = 0x3C`.
+O OLED já vem ligado na HW-364A. O firmware usa `OLED_HW364A = true`, com SDA GPIO14 e SCL GPIO12, endereço `0x3C`. Em uma placa diferente, alterar a pinagem do OLED exige também **revisar os pinos dos LEDs** para evitar conflitos.
+
+O buzzer é **opcional**: use somente módulo **ativo**, compatível com 3,3 V e corrente segura para o GPIO, ou circuito com transistor e alimentação adequada. **Não** conecte um buzzer de 5 V diretamente ao GPIO. GPIO16 (D0) apenas liga/desliga esse buzzer, sem PWM; configure `HABILITAR_BUZZER_ATIVO = true` somente após validar o circuito. Não conecte nada em GPIO0/D3, GPIO2/D4 ou GPIO15/D8 durante o diagnóstico de boot.
 
 ## 3. Manter usuário e senha no projeto
 
@@ -69,6 +72,10 @@ O painel usa layout responsivo: no celular os cartões ficam em coluna; em PC, p
 No painel, preencha nome, hora e minuto em cada uma das três gavetas e toque em **Salvar gaveta**. As configurações são gravadas em LittleFS. No horário marcado, o LED correspondente pisca por um minuto. O botão **Silenciar alarmes de hoje** apaga os LEDs e suspende os próximos avisos luminosos do dia enquanto a placa permanecer ligada.
 
 ## 8. Diagnóstico
+
+Se a gravação falhar com `Connecting...` / `Timed out waiting for packet header`, ou houver `PermissionError(13, 'Acesso negado')`, use o [guia de upload e modos de boot da HW-364A](diagnostico-upload-hw364a.md) antes de mudar o firmware.
+
+### Outras falhas
 
 - **Não abre `medbox.local`:** tente o IP numérico; mDNS não é universal.
 - **Sem IP:** verifique SSID, senha, 2,4 GHz, alcance e reinicie a placa.
