@@ -7,6 +7,8 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <LittleFS.h>
+#include <time.h>
+#include <stdlib.h>
 #include "secrets.h"
 
 // Prototipos explicitos para evitar geracao incorreta pelo ArduinoDroid.
@@ -20,6 +22,7 @@ void silenciar();
 void testarLeds();
 void paginaLogin(bool invalido, bool bloqueado);
 void atualizarOled(bool forcar);
+void confirmarDose();
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -59,6 +62,83 @@ constexpr unsigned long DURACAO_ETAPA_TESTE_MS = 3000UL;
 constexpr unsigned long DURACAO_TESTE_LEDS_MS = 3UL * DURACAO_ETAPA_TESTE_MS;
 unsigned long ultimaTentativaWiFi = 0;
 unsigned long ultimaTentativaNTP = 0;
+bool armazenamentoDisponivel=false;
+constexpr uint8_t MAX_CONFIRMACOES=24;
+struct ConfirmacaoDose {
+  uint32_t instanteLocal;
+  uint8_t gaveta;
+  uint16_t minutoProgramado;
+  String medicamento;
+};
+ConfirmacaoDose confirmacoes[MAX_CONFIRMACOES];
+uint8_t totalConfirmacoes=0;
+
+void adicionarConfirmacao(const ConfirmacaoDose &r) {
+  if(totalConfirmacoes==MAX_CONFIRMACOES) {
+    for(uint8_t i=1;i<MAX_CONFIRMACOES;i++)confirmacoes[i-1]=confirmacoes[i];
+    totalConfirmacoes--;
+  }
+  confirmacoes[totalConfirmacoes++]=r;
+}
+void carregarConfirmacoes() {
+  if(!armazenamentoDisponivel)return;
+  File f=LittleFS.open("/confirmacoes.txt","r");
+  if(!f)return;
+  while(f.available()) {
+    String linha=f.readStringUntil('\n');linha.trim();
+    int a=linha.indexOf('|'),b=linha.indexOf('|',a+1),d=linha.indexOf('|',b+1);
+    if(a<1||b<=a||d<=b)continue;
+    String quando=linha.substring(0,a),idx=linha.substring(a+1,b);
+    String horario=linha.substring(b+1,d),nome=linha.substring(d+1);
+    if(quando.length()!=10||idx.length()!=1||idx[0]<'0'||idx[0]>'2'||
+       horario.length()<1||horario.length()>4||nome.length()<1||nome.length()>40||
+       nome.indexOf('|')>=0)continue;
+    bool valido=true;
+    for(unsigned int i=0;i<quando.length();i++)if(quando[i]<'0'||quando[i]>'9')valido=false;
+    for(unsigned int i=0;i<horario.length();i++)if(horario[i]<'0'||horario[i]>'9')valido=false;
+    if(!valido)continue;
+    uint32_t t=strtoul(quando.c_str(),nullptr,10);
+    uint16_t min=(uint16_t)horario.toInt();
+    if(t<1700000000UL||min>=1440)continue;
+    ConfirmacaoDose r={t,(uint8_t)(idx[0]-'0'),min,nome};
+    adicionarConfirmacao(r);
+  }
+  f.close();
+}
+bool persistirConfirmacao(const ConfirmacaoDose &novo) {
+  if(!armazenamentoDisponivel)return false;
+  File f=LittleFS.open("/confirmacoes.tmp","w");
+  if(!f)return false;
+  bool gravou=true;
+  uint8_t inicio=(totalConfirmacoes==MAX_CONFIRMACOES)?1:0;
+  for(uint8_t i=inicio;i<totalConfirmacoes;i++) {
+    const ConfirmacaoDose &r=confirmacoes[i];
+    String linha=String(r.instanteLocal)+"|"+String(r.gaveta)+"|"+
+                 String(r.minutoProgramado)+"|"+r.medicamento;
+    if(f.println(linha)==0)gravou=false;
+  }
+  String nova=String(novo.instanteLocal)+"|"+String(novo.gaveta)+"|"+
+              String(novo.minutoProgramado)+"|"+novo.medicamento;
+  if(f.println(nova)==0)gravou=false;
+  f.flush();f.close();
+  if(!gravou||!LittleFS.rename("/confirmacoes.tmp","/confirmacoes.txt")) {
+    LittleFS.remove("/confirmacoes.tmp");
+    return false;
+  }
+  adicionarConfirmacao(novo);
+  return true;
+}
+bool confirmadaHoje(uint8_t indice,uint32_t dia) {
+  if(indice>=3)return false;
+  uint16_t horario=gavetas[indice].hora*60+gavetas[indice].minuto;
+  for(uint8_t i=0;i<totalConfirmacoes;i++){
+    const ConfirmacaoDose &r=confirmacoes[i];
+    if(r.gaveta==indice&&r.minutoProgramado==horario&&
+       r.instanteLocal/86400UL==dia)return true;
+  }
+  return false;
+}
+
 
 struct Gaveta {
   uint8_t hora, minuto;
@@ -158,6 +238,17 @@ void atualizarOled(bool forcar) {
   display.setTextSize(1);
   display.setCursor(0,0);
   display.print(F("MEDBOX"));
+  if(horaSincronizada){
+    uint32_t dia=timeClient.getEpochTime()/86400UL;
+    uint8_t ok=0,ativas=0;
+    for(uint8_t i=0;i<3;i++){
+      if(gavetas[i].hora<24&&gavetas[i].remedio.length()>0){
+        ativas++; if(confirmadaHoje(i,dia))ok++;
+      }
+    }
+    display.setCursor(40,0);
+    display.print(ok);display.print('/');display.print(ativas);
+  }
 
   if (horaSincronizada) {
     char horario[9];
@@ -466,6 +557,46 @@ bool inteiroValido(const String &s, int minV, int maxV) {
   int v=s.toInt();
   return v>=minV && v<=maxV;
 }
+void confirmarDose() {
+  if(!autorizado()||!csrfValido())return;
+  if(!horaSincronizada||!armazenamentoDisponivel){
+    cabecalhosSemCache();
+    server.send(503,"text/plain; charset=utf-8",
+                "Relogio ou armazenamento indisponivel. Confirmacao nao registrada.");
+    return;
+  }
+  const String indiceStr=server.arg("index");
+  if(!inteiroValido(indiceStr,0,2)){
+    cabecalhosSemCache();
+    server.send(400,"text/plain; charset=utf-8","Gaveta invalida");
+    return;
+  }
+  uint8_t i=(uint8_t)indiceStr.toInt();
+  Gaveta &g=gavetas[i];
+  uint32_t agora=timeClient.getEpochTime(),dia=agora/86400UL;
+  uint16_t minutos=(agora%86400UL)/60UL;
+  uint16_t agendado=g.hora*60+g.minuto;
+  if(g.hora>=24||g.remedio.length()==0||
+     server.arg("dia")!=String(dia)||
+     server.arg("horario")!=String(agendado)||
+     minutos<agendado||confirmadaHoje(i,dia)){
+    cabecalhosSemCache();
+    server.send(409,"text/plain; charset=utf-8",
+                "Dose ou formulario desatualizado. Atualize o painel.");
+    return;
+  }
+  ConfirmacaoDose r={agora,i,agendado,g.remedio};
+  if(!persistirConfirmacao(r)){
+    cabecalhosSemCache();
+    server.send(500,"text/plain; charset=utf-8","Falha ao salvar a confirmacao.");
+    return;
+  }
+  g.alertaLedAtivo=false;
+  g.ultimoDia=(long)dia;
+  atualizarLeds();
+  atualizarOled(true);
+  redirecionar("/#historico");
+}
 void raiz() {
   if (!autorizado()) return;
   const bool horarioOK=horaSincronizada;
@@ -723,6 +854,7 @@ class MedBoxRouteHandler : public RequestHandler {
     else if (method == HTTP_POST && uri == "/limpar") limparGaveta();
     else if (method == HTTP_POST && uri == "/silenciar") silenciar();
     else if (method == HTTP_POST && uri == "/testar-leds") testarLeds();
+    else if (method == HTTP_POST && uri == "/confirmar-dose") confirmarDose();
     else {
       if (!autorizado()) return true;
       cabecalhosSemCache();
@@ -738,8 +870,9 @@ void setup() {
     digitalWrite(pin, LOW);
     pinMode(pin, OUTPUT);
   }
-  if (LittleFS.begin()) carregarConfiguracao();
-  else Serial.println(F("Falha LittleFS: configuracoes nao serao persistidas"));
+  armazenamentoDisponivel=LittleFS.begin();
+  if(armazenamentoDisponivel){carregarConfiguracao();carregarConfirmacoes();}
+  else Serial.println(F("Falha LittleFS: historico e configuracoes indisponiveis"));
   Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
   Wire.beginTransmission(OLED_ENDERECO);
   oledDisponivel = Wire.endTransmission() == 0 &&
@@ -802,7 +935,8 @@ void loop() {
     long dia=(long)(segundos/86400UL);
     int h=timeClient.getHours(), m=timeClient.getMinutes();
     for(int i=0;i<3;i++) {
-      if(h==gavetas[i].hora && m==gavetas[i].minuto && gavetas[i].ultimoDia!=dia) {
+      if(h==gavetas[i].hora && m==gavetas[i].minuto &&
+         gavetas[i].ultimoDia!=dia && !confirmadaHoje(i,(uint32_t)dia)) {
         gavetas[i].ultimoDia=dia;
         testeLedsAtivo=false; // Um lembrete verdadeiro tem prioridade sobre um teste.
         gavetas[i].inicioAlertaLed = millis();
