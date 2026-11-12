@@ -13,6 +13,7 @@
 9. **Silenciar LEDs atuais** interrompe os LEDs em andamento sem cancelar próximos horários. **Testar LEDs** aciona sequencialmente os três LEDs por 3 segundos cada e não altera horários.
 10. As gavetas começam desativadas (sem medicamentos fictícios); o botão **Limpar** desativa individualmente e persiste a alteração no LittleFS.
 11. Após o horário agendado, o responsável pode clicar **Confirmar dose tomada**. O registro guarda o instante local, a gaveta, o medicamento e o horário programado; o LED daquela gaveta para de piscar, sem interromper os demais. O OLED mostra quantas doses foram confirmadas hoje.
+12. Quando uma dose for marcada por engano, o responsável pode usar **Desfazer confirmação** no cartão da gaveta ou na linha correspondente do histórico. Só a confirmação escolhida é desmarcada. O status e a contagem do OLED voltam a refletir a ausência dessa confirmação.
 
 ## OLED integrado: atualização automática
 
@@ -53,7 +54,9 @@ A autenticação agora é feita por página própria (usuário e senha), seguida
 - O servidor só aceita a confirmação **após o horário programado**, com Wi-Fi/NTP sincronizado, LittleFS disponível, sessão e token CSRF válidos. Também verifica o dia e o horário original do formulário.
 - Cada confirmação fica armazenada em `/confirmacoes.txt` na própria HW-364A, em um histórico limitado aos **24 registros mais recentes**; o site mostra os **8 mais recentes**. O arquivo é recriado por escrita temporária e renomeação. Essas informações não são enviadas ao GitHub nem a serviços externos.
 - Uma dose confirmada não dispara novamente naquele dia, mesmo após reinício, desde que o horário daquela gaveta não seja alterado. Um horário que passou e não foi confirmado aparece como **“aguardando confirmação”**, sem afirmar automaticamente que foi esquecido.
-- Somente a programação do **dia atual** pode ser confirmada. A meia-noite inicia um novo dia de registros; não é possível corrigir ou revogar uma confirmação equivocada pelo painel nesta versão.
+- Somente a programação do **dia atual** pode ser confirmada. A meia-noite inicia um novo dia de registros. Uma confirmação feita por engano pode ser **desfeita** no cartão do dia atual ou no histórico, enquanto o registro estiver entre os últimos 24.
+- Ao desfazer, o servidor exige sessão autenticada e token CSRF; confere posição, instante, gaveta e horário do registro para evitar remover uma entrada diferente de uma página desatualizada. Primeiro grava o histórico revisado no LittleFS e só depois atualiza a memória. Erros de armazenamento preservam o registro anterior.
+- **Desfazer não reinicia os LEDs nem altera o horário agendado.** A dose volta a aparecer pendente quando a programação do dia já passou; se o horário foi alterado, apenas o registro histórico é removido. Não se deve usar uma nova confirmação para representar uma segunda dose.
 - Esta função **não é prova médica**, não detecta abertura de gavetas ou ingestão e não substitui outro lembrete confiável.
 
 ## Persistência e alertas
