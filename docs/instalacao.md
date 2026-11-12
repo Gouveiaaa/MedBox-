@@ -68,7 +68,7 @@ Ao abrir o endereço, **a primeira página é a tela `Entrar no MedBox`**, antes
 
 ## 7. Configurar os medicamentos
 
-Após o login, use **Editar** na gaveta desejada e informe medicamento, hora e minuto. Clique em **Salvar horário**. Os horários ficam no LittleFS. **Limpar** desativa a gaveta escolhida. No horário agendado o LED correspondente pisca durante **60 segundos**, sem som. **Silenciar LEDs atuais** interrompe o alerta em andamento, sem cancelar os próximos horários. **Testar LEDs** faz cada LED piscar por 3 segundos, em sequência, num teste total de 9 segundos. O relógio e a contagem até a próxima dose exigem NTP previamente sincronizado. A interface não confirma ingestão de medicamentos.
+Após o login, use **Editar** na gaveta desejada e informe medicamento, hora e minuto. Clique em **Salvar horário**. Os horários ficam no LittleFS. **Limpar** desativa a gaveta escolhida. No horário agendado o LED correspondente pisca durante **60 segundos**, sem som. **Silenciar LEDs atuais** interrompe o alerta em andamento, sem cancelar os próximos horários. **Testar LEDs** faz cada LED piscar por 3 segundos, em sequência, num teste total de 9 segundos. O relógio e a contagem até a próxima dose exigem NTP previamente sincronizado. **O OLED integrado também mostra automaticamente a hora e o próximo medicamento**, inclusive após cadastrar ou mudar horários no site, sem regravar o código. Enquanto o LED pisca, o OLED mostra o aviso daquela gaveta e, após um minuto, volta à tela principal. A interface não confirma ingestão de medicamentos.
 
 ## 8. Diagnóstico
 
