@@ -1,0 +1,34 @@
+name: Compilar MedBox ESP8266
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  compilacao:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Instalar Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+      - name: Instalar core ESP8266
+        run: |
+          arduino-cli core update-index --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
+          arduino-cli core install esp8266:esp8266@3.1.2 --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
+      - name: Instalar bibliotecas
+        run: |
+          arduino-cli lib install "Adafruit GFX Library"
+          arduino-cli lib install "Adafruit SSD1306"
+          arduino-cli lib install "NTPClient"
+      - name: Preparar sketch sem credenciais reais
+        run: |
+          mkdir -p "$RUNNER_TEMP/MedBox"
+          cp firmware/MedBox.ino "$RUNNER_TEMP/MedBox/MedBox.ino"
+          cp firmware/secrets.example.h "$RUNNER_TEMP/MedBox/secrets.h"
+      - name: Compilar firmware HW-364A
+        run: arduino-cli compile --fqbn esp8266:esp8266:generic "$RUNNER_TEMP/MedBox"
+      - name: Compilar scanner I2C
+        run: arduino-cli compile --fqbn esp8266:esp8266:generic diagnosticos/Diagnostico_HW364A

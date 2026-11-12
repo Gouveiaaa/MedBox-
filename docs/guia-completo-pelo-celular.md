@@ -78,7 +78,7 @@ O **usuário e a senha do painel são diferentes** da senha do Wi-Fi. O firmware
 2. Ligue ou reinicie o ESP8266.
 3. Aguarde a conexão. O código tenta conectar durante aproximadamente **20 segundos** no início.
 4. Consulte o **IP no OLED** ou no **Monitor Serial a 115200 baud**. Exemplo ilustrativo: `192.168.43.125` (o IP real será diferente).
-5. Se não conectar nesse prazo, confira as credenciais e **reinicie o ESP8266**. A versão atual não inicia o servidor se a primeira conexão ocorrer somente depois do tempo limite.
+5. Se o Wi-Fi não conectar na primeira tentativa, confira as credenciais e mantenha a rede disponível. O firmware agora tenta iniciar o painel quando reconectar, mas essa melhoria ainda precisa de teste físico.
 
 ## 8. Abrir e usar o painel no celular
 

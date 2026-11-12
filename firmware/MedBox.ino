@@ -13,16 +13,18 @@
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
 
-// Use true nas placas com OLED em SDA D6 (GPIO12) e SCL D5 (GPIO14).
-constexpr bool OLED_NOS_PINOS_D6_D5 = false;
-constexpr uint8_t OLED_SDA_PIN = OLED_NOS_PINOS_D6_D5 ? 12 : 4;
-constexpr uint8_t OLED_SCL_PIN = OLED_NOS_PINOS_D6_D5 ? 14 : 5;
+// HW-364A: OLED interno SDA = GPIO14 (D6) e SCL = GPIO12 (D5).
+// Altere para false SOMENTE se seu hardware usar o OLED em D2/D1.
+constexpr bool OLED_HW364A = true;
+constexpr uint8_t OLED_SDA_PIN = OLED_HW364A ? 14 : 4;
+constexpr uint8_t OLED_SCL_PIN = OLED_HW364A ? 12 : 5;
 constexpr uint8_t OLED_ENDERECO = 0x3C;
-constexpr uint8_t LED_PINS[] = {
-  OLED_NOS_PINOS_D6_D5 ? 5 : 14, // Gaveta 1, azul (D1 ou D5)
-  OLED_NOS_PINOS_D6_D5 ? 4 : 12, // Gaveta 2, vermelho (D2 ou D6)
-  13                           // Gaveta 3, verde (D7)
-};
+// Pinos escolhidos para nao usar GPIO0, GPIO2, GPIO15 nem os pinos do OLED.
+constexpr uint8_t LED_PINS[] = { 5, 4, 13 }; // D1, D2, D7
+// Apenas buzzer ATIVO de 3,3 V e corrente compativel; veja docs/instalacao.md.
+// Deixe desabilitado enquanto nao houver um circuito eletrico validado.
+constexpr bool HABILITAR_BUZZER_ATIVO = false;
+constexpr uint8_t BUZZER_PIN = 16; // D0/GPIO16, liga/desliga sem PWM
 constexpr unsigned long DURACAO_ALERTA_LED = 60000UL;
 constexpr unsigned long INTERVALO_LED = 500UL;
 
@@ -33,6 +35,7 @@ NTPClient timeClient(ntpUDP, "a.st1.ntp.br", -10800, 60000);
 bool oledDisponivel = false;
 bool horaSincronizada = false;
 bool mdnsAtivo = false;
+bool wifiEstavaConectado = false;
 bool alarmeSilenciado = false;
 unsigned long ultimaTentativaWiFi = 0;
 unsigned long ultimaTentativaNTP = 0;
@@ -105,6 +108,7 @@ bool autorizado() {
 }
 void atualizarLeds() {
   const unsigned long agora = millis();
+  bool algumAlarmeAtivo = false;
   for (int i = 0; i < 3; i++) {
     Gaveta &gaveta = gavetas[i];
     const unsigned long decorrido = agora - gaveta.inicioAlertaLed;
@@ -113,6 +117,13 @@ void atualizarLeds() {
     }
     const bool aceso = gaveta.alertaLedAtivo && (decorrido / INTERVALO_LED) % 2 == 0;
     digitalWrite(LED_PINS[i], aceso ? HIGH : LOW);
+    if (gaveta.alertaLedAtivo) algumAlarmeAtivo = true;
+  }
+  if (HABILITAR_BUZZER_ATIVO) {
+    // Buzzer ativo: pulsos simples de 500 ms, sem tone() nem PWM no GPIO16.
+    const bool tocar = algumAlarmeAtivo && !alarmeSilenciado &&
+                        ((agora / INTERVALO_LED) % 2 == 0);
+    digitalWrite(BUZZER_PIN, tocar ? HIGH : LOW);
   }
 }
 void silenciar() {
@@ -195,11 +206,30 @@ void salvar() {
   server.sendHeader("Location","/",true);
   server.send(303,"text/plain","");
 }
+void iniciarServicosWeb() {
+  // Rotas registradas uma unica vez no setup; reabre o servidor ao reconectar.
+  server.begin();
+  mdnsAtivo = MDNS.begin("medbox");
+  if (mdnsAtivo) {
+    MDNS.addService("http", "tcp", 80);
+    Serial.println(F("mDNS: http://medbox.local"));
+  } else {
+    Serial.println(F("mDNS indisponivel; utilize o IP local"));
+  }
+  Serial.print(F("MedBox acessivel em http://"));
+  Serial.println(WiFi.localIP());
+  tela("Sistema pronto", "Abra no navegador", WiFi.localIP().toString());
+}
+
 void setup() {
   Serial.begin(115200);
   for (uint8_t pin : LED_PINS) {
     digitalWrite(pin, LOW);
     pinMode(pin, OUTPUT);
+  }
+  if (HABILITAR_BUZZER_ATIVO) {
+    digitalWrite(BUZZER_PIN, LOW);
+    pinMode(BUZZER_PIN, OUTPUT);
   }
   if (LittleFS.begin()) carregarConfiguracao();
   else Serial.println(F("Falha LittleFS: configuracoes nao serao persistidas"));
@@ -211,6 +241,10 @@ void setup() {
     Serial.println(F("OLED indisponivel: confira SDA, SCL e endereco I2C"));
   }
   tela("Conectando Wi-Fi...","","");
+  server.on("/", HTTP_GET, raiz);
+  server.on("/salvar", HTTP_POST, salvar);
+  server.on("/silenciar", HTTP_POST, silenciar);
+  timeClient.begin();
   WiFi.mode(WIFI_STA);
   WiFi.begin(MEDBOX_WIFI_SSID,MEDBOX_WIFI_PASSWORD);
   unsigned long inicio=millis();
@@ -218,39 +252,44 @@ void setup() {
     delay(250);
     yield();
   }
-  if(WiFi.status()==WL_CONNECTED) {
-    timeClient.begin();
-    horaSincronizada=timeClient.forceUpdate();
-    server.on("/",HTTP_GET,raiz);
-    server.on("/salvar",HTTP_POST,salvar);
-    server.on("/silenciar",HTTP_POST,silenciar);
-    server.begin();
-    mdnsAtivo = MDNS.begin("medbox");
-    if (mdnsAtivo) { MDNS.addService("http", "tcp", 80); Serial.println(F("mDNS: http://medbox.local")); }
-    tela("Sistema pronto","Abra no navegador",WiFi.localIP().toString());
-    Serial.println(WiFi.localIP());
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiEstavaConectado = true;
+    iniciarServicosWeb();
+    horaSincronizada = timeClient.forceUpdate();
   } else {
-    tela("Wi-Fi indisponivel","Reinicie e confira","rede 2.4 GHz");
+    // Continua procurando a rede no loop e inicia o painel quando ela voltar.
+    tela("Wi-Fi indisponivel", "Tentando reconectar", "rede 2.4 GHz");
+    Serial.println(F("Wi-Fi indisponivel; aguardando reconexao"));
   }
 }
 void loop() {
   atualizarLeds();
-  if(WiFi.status()!=WL_CONNECTED) {
-    if(millis()-ultimaTentativaWiFi>10000UL) {
-      ultimaTentativaWiFi=millis();
+  if (WiFi.status() != WL_CONNECTED) {
+    if (wifiEstavaConectado) {
+      wifiEstavaConectado = false;
+      mdnsAtivo = false;
+      Serial.println(F("Wi-Fi caiu; tentando reconectar"));
+    }
+    if (millis() - ultimaTentativaWiFi > 10000UL) {
+      ultimaTentativaWiFi = millis();
       WiFi.reconnect();
     }
-    delay(100);
-    return;
+  } else {
+    if (!wifiEstavaConectado) {
+      wifiEstavaConectado = true;
+      iniciarServicosWeb();
+      if (timeClient.forceUpdate()) horaSincronizada = true;
+    }
+    server.handleClient();
+    if (mdnsAtivo) MDNS.update();
+    if (timeClient.update()) horaSincronizada = true;
+    if (!horaSincronizada && millis() - ultimaTentativaNTP > 15000UL) {
+      ultimaTentativaNTP = millis();
+      horaSincronizada = timeClient.forceUpdate();
+    }
   }
-
-  server.handleClient();
-  if (mdnsAtivo) MDNS.update();
-  if(timeClient.update()) horaSincronizada=true;
-  if(!horaSincronizada && millis()-ultimaTentativaNTP>15000UL) {
-    ultimaTentativaNTP=millis();
-    horaSincronizada=timeClient.forceUpdate();
-  }
+  // Depois de sincronizado ao menos uma vez, o relogio segue por millis()
+  // durante quedas temporarias de Wi-Fi. Nao substitui um RTC dedicado.
   if(horaSincronizada) {
     unsigned long segundos=timeClient.getEpochTime();
     long dia=(long)(segundos/86400UL);
@@ -270,5 +309,5 @@ void loop() {
       }
     }
   }
-  delay(200);
+  delay(100);
 }
