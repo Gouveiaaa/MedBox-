@@ -782,13 +782,37 @@ footer{font-size:12px;color:#718096;text-align:center;padding-bottom:12px}
 <form action="/testar-leds" method="post"><input type="hidden" name="csrf" value=")MBUI");
   html+=csrfToken;
   html+=F(R"MBUI("><button class="outline" type="submit" style="width:100%">Testar LEDs</button></form>
-</div><p class="hint">O teste pisca os três LEDs, um por vez, por 3 segundos cada. Sem som.</p>
+</div><p class="hint">O teste pisca os três LEDs, um por vez, por 3 segundos cada. Sem som. O teste não confirma doses.</p>
 <p class="hint" id="teste-estado" aria-live="polite"></p></section>
 <section class="card" id="sobre"><h2>ⓘ Dica</h2>
 <div class="tip">Os nomes e horários são guardados na placa. O MedBox utiliza somente sinalização luminosa por LEDs, sem alarme sonoro.</div>
 <form action="/sair" method="post"><input type="hidden" name="csrf" value=")MBUI");
   html+=csrfToken;
-  html+=F(R"MBUI("><button class="logout" type="submit">Sair da conta</button></form></section></div>
+  html+=F(R"MBUI("><button class="logout" type="submit">Sair da conta</button></form></section></div><section class="card" id="historico"><h2 style="font-size:16px;color:#1a548f;margin:0 0 10px">✓ Histórico de confirmações</h2>
+<p class="muted">Registros manuais feitos por um responsável. Não comprovam ingestão.</p>)MBUI");
+  if(totalConfirmacoes==0) {
+    html+=F("<p class='muted'>Nenhuma dose confirmada ainda.</p>");
+  } else {
+    const int inicio=totalConfirmacoes>8 ? totalConfirmacoes-8 : 0;
+    for(int i=totalConfirmacoes-1;i>=inicio;i--){
+      const ConfirmacaoDose &reg=confirmacoes[i];
+      time_t instante=(time_t)reg.instanteLocal;
+      struct tm horaRegistro;
+      gmtime_r(&instante,&horaRegistro); // instante ja deslocado para UTC-3
+      char carimbo[22];
+      snprintf(carimbo,sizeof(carimbo),"%02d/%02d/%04d %02d:%02d",
+        horaRegistro.tm_mday,horaRegistro.tm_mon+1,horaRegistro.tm_year+1900,
+        horaRegistro.tm_hour,horaRegistro.tm_min);
+      html+=F("<div class='history-row'><div><b>✓ Gaveta ");
+      html+=String(reg.gaveta+1);
+      html+=F("</b><div>");
+      html+=escapeHtml(reg.medicamento);
+      html+=F("</div></div><small>");
+      html+=String(carimbo);
+      html+=F("</small></div>");
+    }
+  }
+  html+=F(R"MBUI(</section>
 <footer>Protótipo educacional: mantenha também outro lembrete confiável para seus medicamentos.</footer></main></div>
 <script>
 (function(){
@@ -803,14 +827,24 @@ footer{font-size:12px;color:#718096;text-align:center;padding-bottom:12px}
   // O NTPClient do firmware já aplica UTC-3: formatar sempre em UTC no navegador.
   var local=inicio+Math.floor((Date.now()-carga)/1000),d=new Date(local*1000);
   var h=d.getUTCHours(),m=d.getUTCMinutes(),s=d.getUTCSeconds();
+  if(Math.floor(local/86400)!==Number(rel.dataset.dia)){location.reload();return}
   rel.textContent=dois(h)+':'+dois(m)+':'+dois(s);
   data.textContent=nomes[d.getUTCDay()]+', '+d.getUTCDate()+' de '+meses[d.getUTCMonth()]+' de '+d.getUTCFullYear();
   var agora=h*3600+m*60+s,proximo=null;
   cards.forEach(function(c){
    var minuto=Number(c.dataset.min);
    if(minuto<0)return;
-   var delta=minuto*60-agora;if(delta<0)delta+=86400;
+   var delta=minuto*60-agora;
+   if(delta<0 || c.dataset.confirmada==='1')delta+=86400;
    if(proximo===null||delta<proximo.delta)proximo={delta:delta,card:c,minuto:minuto};
+  });
+  cards.forEach(function(c){
+   var status=c.querySelector('.confirmstatus'),btn=c.querySelector('.confirmbtn');
+   if(!status||Number(c.dataset.min)<0||c.dataset.confirmada==='1')return;
+   var vencida=agora>=Number(c.dataset.min)*60;
+   status.textContent=vencida?'Horario passou: aguardando confirmacao':'Agendada: ainda nao confirmada';
+   status.className='confirmstatus'+(vencida?' due':'');
+   if(btn)btn.disabled=!vencida;
   });
   if(proximo){
    document.getElementById('prox-nome').textContent=proximo.card.dataset.nome;
@@ -826,6 +860,11 @@ footer{font-size:12px;color:#718096;text-align:center;padding-bottom:12px}
   }
  }
  atualizar();setInterval(atualizar,1000);
+ document.querySelectorAll('.confirmform').forEach(function(form){
+  form.addEventListener('submit',function(e){
+   if(!window.confirm('Confirma que esta dose foi tomada? O registro sera manual.'))e.preventDefault();
+  });
+ });
  document.querySelectorAll('.edit').forEach(function(b){
   b.addEventListener('click',function(){
    var form=b.closest('.drawer').querySelector('.editor');
