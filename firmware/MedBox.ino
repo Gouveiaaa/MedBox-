@@ -9,6 +9,17 @@
 #include <LittleFS.h>
 #include "secrets.h"
 
+// Prototipos explicitos para evitar geracao incorreta pelo ArduinoDroid.
+void raiz();
+void mostrarLogin();
+void enviarLogin();
+void sair();
+void salvar();
+void limparGaveta();
+void silenciar();
+void testarLeds();
+void paginaLogin(bool invalido, bool bloqueado);
+
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
@@ -182,7 +193,7 @@ bool csrfValido() {
   return true;
 }
 
-void paginaLogin(bool invalido = false, bool bloqueado = false) {
+void paginaLogin(bool invalido, bool bloqueado) {
   String html;
   html.reserve(3300);
   html += F(R"MEDBOX(<!doctype html><html lang="pt-BR"><head>
@@ -224,7 +235,7 @@ void mostrarLogin() {
     redirecionar("/");
     return;
   }
-  paginaLogin();
+  paginaLogin(false, false);
 }
 
 void enviarLogin() {
