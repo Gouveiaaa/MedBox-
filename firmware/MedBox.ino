@@ -140,48 +140,76 @@ bool inteiroValido(const String &s, int minV, int maxV) {
   return v>=minV && v<=maxV;
 }
 void raiz() {
-  if(!autorizado()) return;
+  if (!autorizado()) return;
   String html;
-  html.reserve(5800);
+  html.reserve(6200);
   html+=F(R"MEDBOX(<!doctype html><html lang="pt-BR"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#1267c8"><title>MedBox Inteligente</title>
+<meta name="theme-color" content="#145bd7"><title>MedBox | Painel</title>
 <style>
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
-body{margin:0;background:#f1f5f9;color:#152238;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-header{background:#1267c8;color:white;padding:24px max(18px,env(safe-area-inset-right)) 24px max(18px,env(safe-area-inset-left))}
-header .wrap{max-width:1000px;margin:auto}h1{font-size:clamp(1.5rem,5vw,2rem);margin:0}header p{margin:4px 0 0;opacity:.9}
-main{width:100%;max-width:1000px;margin:0 auto;padding:18px max(14px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
-.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-section{min-width:0;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px;box-shadow:0 3px 12px #0f172a0a}
-h2{font-size:1.15rem;margin:0 0 16px;color:#1254a3}
-label{display:block;font-weight:600;font-size:.93rem;margin:12px 0 5px}
-input{display:block;width:100%;min-width:0;border:1px solid #b7c5d6;border-radius:10px;padding:12px;font:inherit;font-size:16px;background:#fff;color:#152238}
-input:focus{outline:2px solid #2581eb;outline-offset:1px}
+body{margin:0;background:#f5f7fb;color:#17233b;font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{background:#fff;border-bottom:1px solid #e5eaf3}
+.wrap{max-width:1020px;margin:auto;padding:0 20px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:19px;padding-bottom:19px}
+.brand{display:flex;align-items:center;gap:12px}
+.symbol{display:grid;place-items:center;flex:none;width:43px;height:43px;border-radius:13px;background:#145bd7;color:#fff;font-size:27px;font-weight:800}
+.brand-name{font-weight:800;font-size:21px;letter-spacing:-.6px;line-height:1.15}
+.brand-caption{font-size:12px;color:#6b7890;margin-top:3px}
+.secure{font-size:12px;color:#395579;background:#edf4ff;border:1px solid #dbe8ff;padding:7px 11px;border-radius:99px;white-space:nowrap}
+main{max-width:1020px;margin:0 auto;padding:32px 20px 22px}
+.lead{margin-bottom:20px}
+h1{font-size:clamp(21px,3.5vw,26px);letter-spacing:-.7px;margin:0;color:#142643}
+.lead p{color:#64748b;margin:5px 0 0;font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+section.card{min-width:0;background:#fff;border:1px solid #e3e8f1;border-radius:15px;padding:19px;box-shadow:0 5px 18px #17294a08}
+.card-title{display:flex;align-items:center;gap:9px;margin-bottom:17px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#1768e6}
+.gaveta-2 .dot{background:#e44756}.gaveta-3 .dot{background:#24a477}
+h2{font-size:16px;font-weight:750;margin:0;color:#162743}
+.card-title small{margin-left:auto;color:#76849a;font-size:12px;font-weight:500}
+label{display:block;font-size:13px;font-weight:650;margin:11px 0 5px;color:#394a62}
+input{display:block;width:100%;min-width:0;background:#fff;border:1px solid #ccd5e3;border-radius:9px;padding:10px 11px;font:inherit;font-size:16px;color:#192940}
+input:focus{outline:2px solid #a4c6ff;outline-offset:1px;border-color:#3c7cf5}
 .time{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-button{display:block;width:100%;min-height:48px;border:0;border-radius:10px;background:#1267c8;color:#fff;font:600 16px system-ui;cursor:pointer;margin-top:18px;padding:12px}
-button:active{filter:brightness(.9)}.mute{background:#b42332}.actions{margin-top:16px}
-footer{color:#526174;text-align:center;font-size:.87rem;margin:22px 0 0}
-@media(max-width:740px){.grid{grid-template-columns:1fr}main{padding-top:14px}section{padding:16px}header{padding-top:20px;padding-bottom:20px}}
-@media(min-width:741px) and (max-width:950px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-</style></head><body><header><div class="wrap"><h1>💊 MedBox Inteligente</h1><p>Configure seus medicamentos e horários</p></div></header>
-<main><div class="grid">)MEDBOX");
-  for(int i=0;i<3;i++) {
-    html+=F("<section><h2>Gaveta "); html+=String(i+1);
-    html+=F("</h2><form action='/salvar' method='post'><input type='hidden' name='index' value='");
+button{display:block;width:100%;min-height:45px;border:0;border-radius:9px;background:#145bd7;color:#fff;font:650 14px system-ui;cursor:pointer;margin-top:17px;padding:11px}
+button:focus-visible{outline:3px solid #9bc4ff;outline-offset:2px}
+button:active{filter:brightness(.92)}
+.actions{margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.actions h2{font-size:15px}
+.actions p{font-size:13px;color:#687991;margin:5px 0 0}
+.actions form{width:230px;flex:none}
+.actions button{margin:0;background:#fff;color:#a52e40;border:1px solid #e9bfc8}
+.actions button:hover{background:#fff2f4}
+footer{font-size:12px;color:#75839a;text-align:center;margin:23px 0 0}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.actions{align-items:stretch;flex-direction:column}.actions form{width:100%}main{padding:24px 16px 20px}.wrap{padding:0 16px}}
+@media(max-width:380px){.secure{font-size:0;padding:7px 10px}.secure:before{content:"🔒";font-size:15px}}
+</style></head><body>
+<header><div class="wrap top"><div class="brand"><span class="symbol" aria-hidden="true">+</span><div><div class="brand-name">MedBox</div><div class="brand-caption">Painel de medicamentos</div></div></div><span class="secure">🔒 Acesso protegido</span></div></header>
+<main><div class="lead"><h1>Suas gavetas</h1><p>Defina o medicamento e o horário de cada gaveta.</p></div>
+<div class="grid">)MEDBOX");
+  for (int i = 0; i < 3; i++) {
+    html+=F("<section class='card gaveta-"); html+=String(i+1);
+    html+=F("'><div class='card-title'><span class='dot' aria-hidden='true'></span><h2>Gaveta ");
+    html+=String(i+1);
+    html+=F("</h2><small>Alerta 1 min</small></div><form action='/salvar' method='post'><input type='hidden' name='index' value='");
     html+=String(i);
     html+=F("'><label for='rem");html+=String(i);html+=F("'>Medicamento</label><input id='rem");html+=String(i);
     html+=F("' name='remedio' maxlength='40' required autocomplete='off' value='");
     html+=escapeHtml(gavetas[i].remedio);
-    html+=F("'><div class='time'><div><label>Hora<input type='number' inputmode='numeric' name='hora' min='0' max='23' required value='");
+    html+=F("'><div class='time'><div><label for='hora");html+=String(i);
+    html+=F("'>Hora</label><input id='hora");html+=String(i);
+    html+=F("' type='number' inputmode='numeric' name='hora' min='0' max='23' required value='");
     html+=String(gavetas[i].hora);
-    html+=F("'></label></div><div><label>Minuto<input type='number' inputmode='numeric' name='minuto' min='0' max='59' required value='");
+    html+=F("'></div><div><label for='minuto");html+=String(i);
+    html+=F("'>Minuto</label><input id='minuto");html+=String(i);
+    html+=F("' type='number' inputmode='numeric' name='minuto' min='0' max='59' required value='");
     html+=String(gavetas[i].minuto);
-    html+=F("'></label></div></div><button type='submit'>Salvar gaveta ");
-    html+=String(i+1);html+=F("</button></form></section>");
+    html+=F("'></div></div><button type='submit'>Salvar horário</button></form></section>");
   }
-  html+=F(R"MEDBOX(</div><section class="actions"><h2>Controle de alarmes</h2><form action="/silenciar" method="post"><button class="mute" type="submit">Silenciar alarmes de hoje</button></form></section>
-<footer>Protótipo educacional. Use também outro lembrete confiável.</footer></main></body></html>)MEDBOX");
+  html+=F(R"MEDBOX(</div><section class="card actions"><div><h2>Controle de alarmes</h2><p>O LED de cada gaveta pisca durante 1 minuto no horário definido.</p></div>
+<form action="/silenciar" method="post"><button type="submit">Silenciar alarmes de hoje</button></form></section>
+<footer>Protótipo educacional. Mantenha também outro lembrete de medicamentos.</footer></main></body></html>)MEDBOX");
   server.send(200,"text/html; charset=utf-8",html);
 }
 
