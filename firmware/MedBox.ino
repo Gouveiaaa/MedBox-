@@ -583,6 +583,36 @@ void iniciarServicosWeb() {
   tela("Sistema pronto", "Abra no navegador", WiFi.localIP().toString());
 }
 
+// Adaptador de rotas: evita conversoes automaticas de funcoes para
+// std::function no compilador integrado ao ArduinoDroid.
+// O ESP8266WebServer continua sendo usado para processar requisicoes e POSTs.
+class MedBoxRouteHandler : public RequestHandler {
+ public:
+  bool canHandle(HTTPMethod method, const String &uri) override {
+    (void)method;
+    (void)uri;
+    return true; // Abrange tambem 404 sem depender de onNotFound().
+  }
+  bool handle(ESP8266WebServer &http, HTTPMethod method,
+              const String &uri) override {
+    (void)http;
+    if (method == HTTP_GET && uri == "/") raiz();
+    else if (method == HTTP_GET && uri == "/login") mostrarLogin();
+    else if (method == HTTP_POST && uri == "/login") enviarLogin();
+    else if (method == HTTP_POST && uri == "/sair") sair();
+    else if (method == HTTP_POST && uri == "/salvar") salvar();
+    else if (method == HTTP_POST && uri == "/limpar") limparGaveta();
+    else if (method == HTTP_POST && uri == "/silenciar") silenciar();
+    else if (method == HTTP_POST && uri == "/testar-leds") testarLeds();
+    else {
+      if (!autorizado()) return true;
+      cabecalhosSemCache();
+      server.send(404, "text/plain; charset=utf-8", "Pagina nao encontrada");
+    }
+    return true;
+  }
+};
+
 void setup() {
   Serial.begin(115200);
   for (uint8_t pin : LED_PINS) {
@@ -600,19 +630,7 @@ void setup() {
   }
   tela("Conectando Wi-Fi...","","");
   server.collectHeaders("Cookie");
-  server.on("/", HTTP_GET, raiz);
-  server.on("/login", HTTP_GET, mostrarLogin);
-  server.on("/login", HTTP_POST, enviarLogin);
-  server.on("/sair", HTTP_POST, sair);
-  server.on("/salvar", HTTP_POST, salvar);
-  server.on("/limpar", HTTP_POST, limparGaveta);
-  server.on("/silenciar", HTTP_POST, silenciar);
-  server.on("/testar-leds", HTTP_POST, testarLeds);
-  server.onNotFound([]() {
-    if (!autorizado()) return;
-    cabecalhosSemCache();
-    server.send(404, "text/plain; charset=utf-8", "Pagina nao encontrada");
-  });
+  server.addHandler(new MedBoxRouteHandler());
   timeClient.begin();
   WiFi.mode(WIFI_STA);
   WiFi.begin(MEDBOX_WIFI_SSID,MEDBOX_WIFI_PASSWORD);
