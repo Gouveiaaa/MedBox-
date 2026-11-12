@@ -19,16 +19,15 @@ No Arduino IDE, adicione o índice de placas `https://arduino.esp8266.com/stable
 |---|---|---|
 | OLED SDA | D6 (GPIO14) | D2 (GPIO4) |
 | OLED SCL | D5 (GPIO12) | D1 (GPIO5) |
-| LED azul, gaveta 1 | D1 (GPIO5) | D1 (GPIO5), **conflito: escolha outro pino** |
-| LED vermelho, gaveta 2 | D2 (GPIO4) | D2 (GPIO4), **conflito: escolha outro pino** |
+| LED vermelho, gaveta 1 | D1 (GPIO5) | D1 (GPIO5), **conflito: escolha outro pino** |
+| LED azul, gaveta 2 | D2 (GPIO4) | D2 (GPIO4), **conflito: escolha outro pino** |
 | LED verde, gaveta 3 | D7 (GPIO13) | D7 (GPIO13) |
-| Buzzer ativo opcional | D0 (GPIO16), desativado no firmware | Validar circuito |
 
 Com a placa desligada, ligue cada saída ao ânodo (perna longa) do LED por um resistor de 220 Ω. Ligue o cátodo (perna curta) ao GND. Use os jumpers para fazer as conexões e mantenha os GPIOs em 3,3 V.
 
 O OLED já vem ligado na HW-364A. O firmware usa `OLED_HW364A = true`, com SDA GPIO14 e SCL GPIO12, endereço `0x3C`. Em uma placa diferente, alterar a pinagem do OLED exige também **revisar os pinos dos LEDs** para evitar conflitos.
 
-O buzzer é **opcional**: use somente módulo **ativo**, compatível com 3,3 V e corrente segura para o GPIO, ou circuito com transistor e alimentação adequada. **Não** conecte um buzzer de 5 V diretamente ao GPIO. GPIO16 (D0) apenas liga/desliga esse buzzer, sem PWM; configure `HABILITAR_BUZZER_ATIVO = true` somente após validar o circuito. Não conecte nada em GPIO0/D3, GPIO2/D4 ou GPIO15/D8 durante o diagnóstico de boot.
+**Não utilize buzzer.** Esta versão do MedBox usa exclusivamente LEDs. Cada LED pisca por 60 segundos quando chega seu horário. O botão **Testar LEDs** pisca os LEDs vermelho, azul e verde em sequência, 3 segundos por LED, sem áudio; é necessário que o hardware esteja conectado corretamente. Não conecte nada em GPIO0/D3, GPIO2/D4 ou GPIO15/D8 durante o diagnóstico de boot.
 
 ## 3. Manter usuário e senha no projeto
 
@@ -69,7 +68,7 @@ Ao abrir o endereço, **a primeira página é a tela `Entrar no MedBox`**, antes
 
 ## 7. Configurar os medicamentos
 
-No painel, preencha nome, hora e minuto em cada uma das três gavetas e toque em **Salvar gaveta**. As configurações são gravadas em LittleFS. No horário marcado, o LED correspondente pisca por um minuto. O botão **Silenciar alarmes de hoje** apaga os LEDs e suspende os próximos avisos luminosos do dia enquanto a placa permanecer ligada.
+Após o login, use **Editar** na gaveta desejada e informe medicamento, hora e minuto. Clique em **Salvar horário**. Os horários ficam no LittleFS. **Limpar** desativa a gaveta escolhida. No horário agendado o LED correspondente pisca durante **60 segundos**, sem som. **Silenciar LEDs atuais** interrompe o alerta em andamento, sem cancelar os próximos horários. **Testar LEDs** faz cada LED piscar por 3 segundos, em sequência, num teste total de 9 segundos. O relógio e a contagem até a próxima dose exigem NTP previamente sincronizado. A interface não confirma ingestão de medicamentos.
 
 ## 8. Diagnóstico
 
