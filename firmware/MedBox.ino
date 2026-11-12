@@ -62,6 +62,20 @@ constexpr unsigned long DURACAO_ETAPA_TESTE_MS = 3000UL;
 constexpr unsigned long DURACAO_TESTE_LEDS_MS = 3UL * DURACAO_ETAPA_TESTE_MS;
 unsigned long ultimaTentativaWiFi = 0;
 unsigned long ultimaTentativaNTP = 0;
+struct Gaveta {
+  uint8_t hora, minuto;
+  String remedio;
+  long ultimoDia; // evita repetição no mesmo dia durante execução
+  unsigned long inicioAlertaLed;
+  bool alertaLedAtivo;
+};
+Gaveta gavetas[3] = {
+  {255, 0, "", -1, 0, false},
+  {255, 0, "", -1, 0, false},
+  {255, 0, "", -1, 0, false}
+};
+// Hora 255 significa gaveta sem medicamento cadastrado.
+
 bool armazenamentoDisponivel=false;
 constexpr uint8_t MAX_CONFIRMACOES=24;
 struct ConfirmacaoDose {
@@ -140,19 +154,7 @@ bool confirmadaHoje(uint8_t indice,uint32_t dia) {
 }
 
 
-struct Gaveta {
-  uint8_t hora, minuto;
-  String remedio;
-  long ultimoDia; // evita repetição no mesmo dia durante execução
-  unsigned long inicioAlertaLed;
-  bool alertaLedAtivo;
-};
-Gaveta gavetas[3] = {
-  {255, 0, "", -1, 0, false},
-  {255, 0, "", -1, 0, false},
-  {255, 0, "", -1, 0, false}
-};
-// Hora 255 significa gaveta sem medicamento cadastrado.
+
 
 void salvarConfiguracao() {
   File f = LittleFS.open("/gavetas.txt", "w");
@@ -602,7 +604,7 @@ void raiz() {
   const bool horarioOK=horaSincronizada;
   const unsigned long horarioLocal=horarioOK ? timeClient.getEpochTime() : 0UL;
   String html;
-  html.reserve(11500);
+  html.reserve(14500);
   html+=F(R"MBUI(<!doctype html><html lang="pt-BR"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#156dc7"><title>MedBox | Painel</title>
@@ -610,6 +612,15 @@ void raiz() {
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%} [hidden]{display:none!important}
 body{margin:0;background:#f2f6fc;color:#11203a;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
 a{color:inherit;text-decoration:none}
+.confirmstatus{margin-top:12px;border-radius:9px;padding:10px 11px;background:#eff4fa;color:#435a76;font-size:13px}
+.confirmstatus.ok{background:#e7f8ef;color:#166e45}
+.confirmstatus.due{background:#fff4e4;color:#865314}
+.confirmform{margin-top:11px}
+.confirmbtn{width:100%;background:#17965a;color:#fff}
+.confirmbtn:disabled{background:#c9d4de;color:#526477;cursor:not-allowed}
+.history-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #e6ecf3;font-size:13px}
+.history-row small{color:#687b94;white-space:nowrap}
+.history-row b{color:#155a38}
 header{background:linear-gradient(105deg,#155aaf,#217acb);color:#fff;padding:14px 24px}
 .head{max-width:1500px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .logo{display:flex;align-items:center;gap:14px}
@@ -675,11 +686,14 @@ footer{font-size:12px;color:#718096;text-align:center;padding-bottom:12px}
 <a href="#gavetas"><span>💊</span>Medicamentos</a>
 <a href="#horarios"><span>◷</span>Horários</a>
 <a href="#alertas"><span>♧</span>Alertas</a>
+<a href="#historico"><span>✓</span>Histórico</a>
 <a href="#sobre"><span>ⓘ</span>Sobre</a>
 </nav></aside><main id="inicio"><div class="summary">
 <section class="card"><p class="overline" id="data">Aguardando sincronização do horário</p>
 <div class="clock" id="relogio" data-local=")MBUI");
   html+=String(horarioLocal);
+  html+=F(R"MBUI(" data-dia=")MBUI");
+  html+=String(horarioOK ? horarioLocal/86400UL : 0UL);
   html+=F(R"MBUI(">--:--:--</div><div class="info">● Wi-Fi conectado. )MBUI");
   if (horarioOK) html+=F("Relógio sincronizado.");
   else html+=F("Aguardando o relógio pela internet.");
@@ -688,15 +702,22 @@ footer{font-size:12px;color:#718096;text-align:center;padding-bottom:12px}
 <div class="muted" id="prox-gaveta">Configure uma das gavetas</div><div id="prox-hora"></div></div></div>
 <div class="muted" style="margin-top:12px">Faltam</div><div class="counter" id="contagem">--:--:--</div>
 </section></div><div id="gavetas" class="grid">)MBUI");
+  const uint32_t diaAtual=horarioOK ? horarioLocal/86400UL : 0UL;
+  const uint16_t minutoAtual=horarioOK ? (horarioLocal%86400UL)/60UL : 0;
   for (uint8_t i=0;i<3;i++) {
     const Gaveta &g=gavetas[i];
     const bool cadastrada=(g.hora<24 && g.remedio.length()>0);
+    const bool confirmada=cadastrada && horarioOK && confirmadaHoje(i,diaAtual);
+    const bool disponivel=cadastrada && horarioOK && !confirmada &&
+                           minutoAtual>=g.hora*60+g.minuto;
     html+=F("<section class='card drawer dose' data-min='");
     html+=String(cadastrada ? (g.hora*60+g.minuto) : -1);
     html+=F("' data-nome='");
     html+=escapeHtml(g.remedio);
     html+=F("' data-gaveta='");
     html+=String(i+1);
+    html+=F("' data-confirmada='");
+    html+=confirmada ? F("1") : F("0");
     html+=F("'><div class='drawer-head'>▣ Gaveta ");
     html+=String(i+1);
     html+=F("</div><div class='drug'><span>💊</span>");
@@ -711,7 +732,30 @@ footer{font-size:12px;color:#718096;text-align:center;padding-bottom:12px}
     } else html+=F("--:--");
     html+=F("</div><div class='tag'>");
     html+=cadastrada ? F("◷ Horário agendado") : F("Configure o horário para ativar o LED");
-    html+=F("</div><div class='buttons'><button type='button' class='blue edit'>✎ Editar</button>");
+    html+=F("</div><div class='confirmstatus");
+    if(confirmada)html+=F(" ok");
+    else if(disponivel)html+=F(" due");
+    html+=F("' aria-live='polite'>");
+    if(!cadastrada)html+=F("Nenhum medicamento cadastrado");
+    else if(confirmada)html+=F("✓ Confirmada pelo usuario hoje");
+    else if(!horarioOK)html+=F("Aguardando relogio NTP");
+    else if(disponivel)html+=F("Horario passou: aguardando confirmacao");
+    else html+=F("Agendada: ainda nao confirmada");
+    html+=F("</div>");
+    if(cadastrada && !confirmada){
+      html+=F("<form class='confirmform' method='post' action='/confirmar-dose'><input type='hidden' name='csrf' value='");
+      html+=csrfToken;
+      html+=F("'><input type='hidden' name='index' value='");
+      html+=String(i);
+      html+=F("'><input type='hidden' name='dia' value='");
+      html+=String(diaAtual);
+      html+=F("'><input type='hidden' name='horario' value='");
+      html+=String(g.hora*60+g.minuto);
+      html+=F("'><button type='submit' class='confirmbtn'");
+      if(!disponivel)html+=F(" disabled");
+      html+=F(">✓ Confirmar dose tomada</button></form>");
+    }
+    html+=F("<div class='buttons'><button type='button' class='blue edit'>✎ Editar</button>");
     html+=F("<form action='/limpar' method='post'><input type='hidden' name='csrf' value='");
     html+=csrfToken;
     html+=F("'><input type='hidden' name='index' value='");
@@ -803,7 +847,8 @@ void salvar() {
   String nome=server.arg("remedio");
   nome.trim();
   if(!inteiroValido(idx,0,2) || !inteiroValido(h,0,23) ||
-     !inteiroValido(m,0,59) || nome.length()==0 || nome.length()>40) {
+     !inteiroValido(m,0,59) || nome.length()==0 || nome.length()>40 || nome.indexOf('|')>=0 ||
+     nome.indexOf('\n')>=0 || nome.indexOf('\r')>=0) {
     server.send(400,"text/plain; charset=utf-8","Dados inválidos");
     return;
   }
