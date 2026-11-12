@@ -8,7 +8,6 @@
 #include <WiFiUdp.h>
 #include <LittleFS.h>
 #include <time.h>
-#include <stdlib.h>
 #include "secrets.h"
 
 // Prototipos explicitos para evitar geracao incorreta pelo ArduinoDroid.
@@ -112,7 +111,15 @@ void carregarConfirmacoes() {
     for(unsigned int i=0;i<quando.length();i++)if(quando[i]<'0'||quando[i]>'9')valido=false;
     for(unsigned int i=0;i<horario.length();i++)if(horario[i]<'0'||horario[i]>'9')valido=false;
     if(!valido)continue;
-    uint32_t t=strtoul(quando.c_str(),nullptr,10);
+    // Interpretacao decimal sem strtoul: compatibilidade com ArduinoDroid.
+    // Rejeita transbordamento de uint32_t em vez de truncar o timestamp.
+    uint32_t t=0;
+    for(unsigned int i=0;i<quando.length();i++){
+      const uint32_t digito=(uint32_t)(quando[i]-'0');
+      if(t>(0xFFFFFFFFUL-digito)/10UL){valido=false;break;}
+      t=t*10UL+digito;
+    }
+    if(!valido)continue;
     uint16_t min=(uint16_t)horario.toInt();
     if(t<1700000000UL||min>=1440)continue;
     ConfirmacaoDose r={t,(uint8_t)(idx[0]-'0'),min,nome};
