@@ -9,12 +9,13 @@
 5. O usuário acessa pelo IP ou por `http://medbox.local` quando a rede suportar mDNS.
 6. A primeira tela é **Entrar no MedBox**. Só depois de autenticar com `MEDBOX_ADMIN_USER` e `MEDBOX_ADMIN_PASSWORD` o painel e os formulários das gavetas ficam acessíveis. O usuário pode encerrar a sessão com **Sair da conta**.
 7. Cada gaveta tem nome, hora e minuto; alterações são salvas no LittleFS.
-8. Quando o horário coincide e o NTP foi sincronizado ao menos uma vez, o OLED mostra o aviso e o LED da gaveta pisca por um minuto. Um buzzer ativo opcional pode alternar junto aos LEDs após configuração elétrica segura. Se mais de uma gaveta tiver o mesmo horário, os LEDs correspondentes piscam e o OLED mostra a última gaveta processada.
-9. O botão **Silenciar alarmes de hoje** apaga os LEDs e desativa os avisos luminosos restantes daquele dia durante a sessão atual.
+8. Quando o horário coincide e o NTP foi sincronizado ao menos uma vez, o OLED mostra o aviso e o LED da gaveta pisca por um minuto, **sem som**. Se mais de uma gaveta tiver o mesmo horário, ambos LEDs piscam.
+9. **Silenciar LEDs atuais** interrompe os LEDs em andamento sem cancelar próximos horários. **Testar LEDs** aciona sequencialmente os três LEDs por 3 segundos cada e não altera horários.
+10. As gavetas começam desativadas (sem medicamentos fictícios); o botão **Limpar** desativa individualmente e persiste a alteração no LittleFS. A interface não confirma tomada do medicamento.
 
 ## Layout do painel
 
-O HTML/CSS é servido diretamente pelo ESP8266, sem hospedagem externa. O painel se ajusta a Android, iOS, tablets e PCs: uma coluna em telas pequenas e múltiplas colunas em telas maiores. Não há aplicativo nativo.
+O HTML/CSS e um script JavaScript curto são servidos diretamente pelo ESP8266, sem hospedagem externa. O layout mantém o cabeçalho azul, menu lateral, relógio sincronizado, próxima dose e três cartões com cores vermelho/azul/verde. Os cartões se reorganizam em tablets e celulares. O JavaScript usa o horário NTP enviado pela placa como referência; não usa relógio local do celular como fonte da hora da medicação. Não há aplicativo nativo.
 
 ## Usuários, senhas e segurança
 
